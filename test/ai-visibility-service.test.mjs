@@ -610,3 +610,92 @@ test('uncited search action sources do NOT falsely trigger brand citation metric
   assert.equal(snapshot.brandCitations, 0);
 });
 
+test('failed search call with action object is NOT searchExecuted: true and is excluded from search visibility denominator', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          id: 'resp_failed_search',
+          output: [
+            {
+              type: 'web_search_call',
+              status: 'failed', // Search execution failed!
+              action: {
+                query: 'best gyms in st petersburg',
+                sources: [{ url: 'https://example.com/source', title: 'Source' }],
+              },
+            },
+            {
+              type: 'message',
+              content: [
+                {
+                  type: 'output_text',
+                  text: 'Best Day Fitness is a top gym in St. Petersburg.',
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: true,
+        recommended: true,
+        sentiment: 'positive',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  const answer = snapshot.answers[0];
+  assert.equal(answer.searchExecuted, false, 'failed search status must NOT be marked searchExecuted: true');
+  assert.equal(answer.searchFailed, true);
+  assert.equal(answer.measurementType, 'model_only');
+  assert.equal(snapshot.searchGroundedCount, 0, 'failed search excluded from search-grounded count');
+  assert.equal(snapshot.searchVisibilityScore, null, 'failed search excluded from search visibility denominator');
+  assert.equal(snapshot.modelOnlyCount, 1, 'failed search labeled and retained as model-only evaluation');
+  assert.equal(snapshot.modelOnlyVisibilityScore, 100, 'scored separately under model-only visibility');
+});
+
+test('absent search without search call is labeled model_only and scored separately', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          id: 'resp_direct_model',
+          output_text: 'Best Day Fitness is located on 1st Ave S in St. Petersburg.',
+          output: [],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: true,
+        recommended: true,
+        sentiment: 'positive',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  const answer = snapshot.answers[0];
+  assert.equal(answer.searchExecuted, false);
+  assert.equal(answer.measurementType, 'model_only');
+  assert.equal(snapshot.searchGroundedCount, 0);
+  assert.equal(snapshot.searchVisibilityScore, null, 'absent search excluded from search visibility denominator');
+  assert.equal(snapshot.modelOnlyCount, 1);
+  assert.equal(snapshot.modelOnlyVisibilityScore, 100);
+});
+
+
