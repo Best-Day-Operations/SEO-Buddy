@@ -162,3 +162,14 @@ test('path normalization and dependency validation are deterministic', () => {
   assert.equal(normalizeBlogPathPrefix('/blog/posts'), '/blog/posts');
   assert.throws(() => createArticleIndexingService({}), /getGoogleAuth is required/);
 });
+
+test('indexing submission distinguishes qualifying schema and rejects non-qualifying when strict', async () => {
+  const testCase = fixture();
+  const res = await testCase.service.submit('https://example.test/jobs/trainer', { schemaType: 'JobPosting' });
+  assert.equal(res.qualifyingSchema, true);
+
+  await assert.rejects(
+    testCase.service.submit('https://example.test/post/guide', { schemaType: 'BlogPosting', strictEligibility: true }),
+    /only accepts JobPosting or BroadcastEvent/,
+  );
+});

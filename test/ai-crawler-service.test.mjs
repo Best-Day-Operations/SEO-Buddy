@@ -97,6 +97,7 @@ test('crawler provider failures are safe and still produce the established saved
   assert.ok(snapshot.fetchError);
   assert.doesNotMatch(snapshot.fetchError, /secret-token|Authorization|upstream said/i);
   assert.equal(snapshot.blocked, 0);
+  assert.ok(snapshot.bots.every(bot => bot.status === 'unknown'));
   assert.equal(state.latest, snapshot);
   assert.equal(saves(), 1);
 });
