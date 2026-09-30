@@ -1232,6 +1232,19 @@ app.post('/api/website-audit/run', requireAuth, async (req, res) => {
   return res.json({ success: result.ok, snapshot: result.snapshot, error: result.error });
 });
 
+app.post('/api/website-audit/geo-import', requireAuth, (req, res) => {
+  const { targetUrl, evidence } = req.body || {};
+  if (!targetUrl || typeof targetUrl !== 'string' || !evidence || typeof evidence !== 'object') {
+    return res.status(400).json({ success: false, error: 'targetUrl string and evidence object are required.' });
+  }
+  try {
+    const importRes = websiteAuditService.importGeoEvidence(targetUrl, evidence);
+    return res.json({ success: true, importRes, latest: websiteAuditService.getLatest() });
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/ghl-schema', (req, res) => {
   const domain = siteDomain();
   const schemaGraph = buildGhlSchemaGraph({ domain });

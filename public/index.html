@@ -1063,6 +1063,62 @@
           </div>
         </div>
 
+        <!-- Section: Website Audit & GHL Schema Engine -->
+        <div class="tool-group" id="oa-website-audit-group" data-ws-section="Website Audit & Schema"><b>Website Audit &amp; Schema</b><span>inspect live GHL preview &amp; generate validated schema</span><i></i></div>
+
+        <div class="content-card" id="website-audit-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <h2 style="margin:0;">Website &amp; AEO Audit</h2>
+                <span class="badge" style="background:rgba(59,130,246,0.15);color:var(--color-primary);font-size:0.75rem;padding:2px 8px;border-radius:4px;font-weight:600;">Locally Implemented &amp; Tested</span>
+              </div>
+              <p class="text-muted" style="margin:4px 0 0;">Inspects the hosted GoHighLevel preview and production website for crawlability, strict head metadata, schema presence, and asset bloat with truthful GEO Optimizer reporting.</p>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px;">
+            <div style="flex:1;min-width:280px;">
+              <label for="audit-target-url" style="font-size:var(--font-xs);font-weight:600;display:block;margin-bottom:4px;">Target URL</label>
+              <input type="text" id="audit-target-url" class="form-input" style="width:100%;font-size:var(--font-sm);" value="https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU?v_test=1790778792385#home" placeholder="https://...">
+            </div>
+            <div style="display:flex;gap:8px;align-self:flex-end;">
+              <button class="btn btn-secondary btn-sm" id="btn-audit-preset-preview" type="button">Hosted GHL Preview</button>
+              <button class="btn btn-secondary btn-sm" id="btn-audit-preset-prod" type="button">Production</button>
+              <button class="btn btn-primary btn-sm" id="btn-run-website-audit" type="button">Run Audit</button>
+            </div>
+          </div>
+
+          <div id="website-audit-results" style="margin-top:16px;">
+            <div class="os-empty">Click &ldquo;Run Audit&rdquo; to inspect the target page.</div>
+          </div>
+        </div>
+
+        <div class="content-card mt-4" id="ghl-schema-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <h2 style="margin:0;">Approved-Fact GHL Schema &amp; Tracking Generator</h2>
+                <span class="badge" style="background:rgba(16,185,129,0.15);color:var(--color-success);font-size:0.75rem;padding:2px 8px;border-radius:4px;font-weight:600;">4-Tier Validated</span>
+              </div>
+              <p class="text-muted" style="margin:4px 0 0;">Generates clean Schema.org graph complying with Google self-serving review policy, approved 7-day business hours (Mon–Sat 4 AM–10 PM, Sun 9 AM–5 PM), and exact NAP facts. Omits 404 images.</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-copy-ghl-snippet" type="button">Copy Tracking Code</button>
+          </div>
+
+          <div id="ghl-schema-validation-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <div style="margin-top:12px;">
+            <label style="font-size:var(--font-xs);font-weight:600;display:block;margin-bottom:4px;">GHL Header Tracking Code (Paste into GHL Page Builder &rarr; Settings &rarr; Tracking Code &rarr; Header)</label>
+            <textarea id="ghl-snippet-output" class="os-schema-box" readonly style="min-height:220px;font-family:monospace;font-size:0.75rem;"></textarea>
+          </div>
+          <div class="text-muted" style="font-size:var(--font-xs);margin-top:8px;">
+            &#9432; <strong>Staging Preview Procedure:</strong> Paste snippet into GHL Builder header tracking code, click <em>Save</em> in the builder, and review via preview link. Do not publish to live production domain until owner launch authorization.
+          </div>
+        </div>
+
         <div class="tool-group" id="oa-opportunities" data-ws-section="Find opportunities"><b>Find opportunities</b><span>what to write about next</span><i></i></div>
         <div class="content-card">
           <h2>Keyword &amp; Topic Ideas</h2>
