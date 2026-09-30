@@ -111,9 +111,17 @@ test('AI visibility run keeps scoring, persistence, retention, and metering stab
     meterUsage: engine => usage.push(engine),
     save: () => { saves += 1; },
     providerRuntime: {
-      fetch: async () => ({
-        json: async () => ({ choices: [{ message: { content: providerCall++ === 0 ? 'Best Day Fitness and Rival Gym' : 'Rival Gym' } }] }),
-      }),
+      fetch: async () => {
+        const text = providerCall++ === 0 ? 'Best Day Fitness and Rival Gym' : 'Rival Gym';
+        return {
+          ok: true,
+          json: async () => ({
+            output_text: text,
+            output: [{ type: 'web_search_call', status: 'completed', action: { sources: [{ url: 'https://bestdayfitness.com' }] } }],
+            choices: [{ message: { content: text } }],
+          }),
+        };
+      },
     },
     geminiGenerate: async request => {
       if (request.config) return { text: '' };
@@ -127,8 +135,18 @@ test('AI visibility run keeps scoring, persistence, retention, and metering stab
   assert.equal(snapshot.shareOfVoice, 33);
   assert.equal(snapshot.sentimentScore, 100);
   assert.equal(snapshot.brandMentions, 1);
-  assert.equal(snapshot.totalAnswers, 2);
-  assert.deepEqual(snapshot.perEngine, [{ engine: 'openai', label: 'ChatGPT', score: 50, answers: 2, classifiedAnswers: 2 }]);
+  assert.deepEqual(snapshot.perEngine, [{
+    engine: 'openai',
+    label: 'ChatGPT',
+    score: 50,
+    searchScore: 50,
+    modelScore: null,
+    answers: 2,
+    searchAnswers: 2,
+    modelAnswers: 0,
+    classifiedAnswers: 2,
+    modelClassifiedAnswers: 0,
+  }]);
   assert.deepEqual(snapshot.leaderboard.map(row => [row.name, row.mentions, row.score]), [
     ['Rival Gym', 2, 100],
     ['Best Day Fitness', 1, 50],
@@ -399,7 +417,10 @@ test('recommendation classification regression: neutral mentions do NOT become r
     providerRuntime: {
       fetch: async () => ({
         ok: true,
-        json: async () => ({ output_text: 'Best Day Fitness is located at 6619 1st Ave S.', output: [] }),
+        json: async () => ({
+          output_text: 'Best Day Fitness is located at 6619 1st Ave S.',
+          output: [{ type: 'web_search_call', status: 'completed', action: { sources: [{ url: 'https://bestdayfitness.com' }] } }],
+        }),
       }),
     },
     geminiGenerate: async () => ({
@@ -430,7 +451,10 @@ test('recommendation classification regression: negative mentions strictly produ
     providerRuntime: {
       fetch: async () => ({
         ok: true,
-        json: async () => ({ output_text: 'Avoid Best Day Fitness, the coaching was disappointing.', output: [] }),
+        json: async () => ({
+          output_text: 'Avoid Best Day Fitness, the coaching was disappointing.',
+          output: [{ type: 'web_search_call', status: 'completed', action: { sources: [{ url: 'https://bestdayfitness.com' }] } }],
+        }),
       }),
     },
     geminiGenerate: async () => ({
@@ -659,8 +683,12 @@ test('failed search call with action object is NOT searchExecuted: true and is e
   assert.equal(answer.measurementType, 'model_only');
   assert.equal(snapshot.searchGroundedCount, 0, 'failed search excluded from search-grounded count');
   assert.equal(snapshot.searchVisibilityScore, null, 'failed search excluded from search visibility denominator');
+  assert.equal(snapshot.visibilityScore, null, 'primary search visibility metric must be unavailable when search fails');
   assert.equal(snapshot.modelOnlyCount, 1, 'failed search labeled and retained as model-only evaluation');
   assert.equal(snapshot.modelOnlyVisibilityScore, 100, 'scored separately under model-only visibility');
+  assert.equal(snapshot.perEngine[0].score, null, 'per-engine primary score must be unavailable when search fails');
+  assert.equal(snapshot.perEngine[0].searchScore, null);
+  assert.equal(snapshot.perEngine[0].modelScore, 100);
 });
 
 test('absent search without search call is labeled model_only and scored separately', async () => {
@@ -694,8 +722,12 @@ test('absent search without search call is labeled model_only and scored separat
   assert.equal(answer.measurementType, 'model_only');
   assert.equal(snapshot.searchGroundedCount, 0);
   assert.equal(snapshot.searchVisibilityScore, null, 'absent search excluded from search visibility denominator');
+  assert.equal(snapshot.visibilityScore, null, 'primary search visibility metric must be unavailable when search is absent');
   assert.equal(snapshot.modelOnlyCount, 1);
   assert.equal(snapshot.modelOnlyVisibilityScore, 100);
+  assert.equal(snapshot.perEngine[0].score, null, 'per-engine primary score must be unavailable when search is absent');
+  assert.equal(snapshot.perEngine[0].searchScore, null);
+  assert.equal(snapshot.perEngine[0].modelScore, 100);
 });
 
 

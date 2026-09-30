@@ -244,7 +244,7 @@
   let avState = null;
   let avMetric = 'visibility';
   const AV_METRIC_META = {
-    visibility: { label: 'Visibility Score', desc: 'Percentage of AI answers that mention your brand.' },
+    visibility: { label: 'Search Visibility Score', desc: 'Percentage of search-grounded AI answers that recommend your brand. Requires verified search evidence.' },
     shareOfVoice: { label: 'How often you are named', desc: 'Your share of all brand mentions vs competitors in AI answers.' },
     sentiment: { label: 'Sentiment', desc: 'How positively AI describes you when it mentions you (100 = all positive).' }
   };
@@ -324,7 +324,17 @@
   function avRenderScore() {
     const snap = avState.latest;
     const val = avMetricValue(snap, avMetric);
-    avEl('av-score').innerHTML = (val == null ? '&mdash;' : val + (avMetric === 'sentiment' ? '' : '%'));
+    if (avMetric === 'visibility') {
+      if (val != null) {
+        avEl('av-score').innerHTML = `${val}%`;
+      } else if (snap && snap.modelOnlyVisibilityScore != null) {
+        avEl('av-score').innerHTML = `<span style="font-size:0.65em;display:block;color:var(--text-muted);">Model-only: ${snap.modelOnlyVisibilityScore}%</span><span style="font-size:0.45em;display:block;color:var(--warn-color,#e65100);">Search Unavailable</span>`;
+      } else {
+        avEl('av-score').innerHTML = '&mdash;';
+      }
+    } else {
+      avEl('av-score').innerHTML = (val == null ? '&mdash;' : val + (avMetric === 'sentiment' ? '' : '%'));
+    }
     avEl('av-metric-desc').innerText = AV_METRIC_META[avMetric].desc;
     const d = avDeltaVal(avMetric);
     const dEl = avEl('av-delta');
@@ -344,9 +354,11 @@
     const snap = avState.latest;
     if (!snap || !snap.perEngine || !snap.perEngine.length) { box.style.display = 'none'; return; }
     box.style.display = '';
-    box.innerHTML = `<div class="av-lb-title">Visibility by engine &middot; latest check</div>` + snap.perEngine.map(pe =>
-      `<div class="av-eng-row"><span>${avEsc(pe.label || pe.engine)}</span><span class="av-eng-track"><span class="av-eng-fill" style="width:${pe.score}%"></span></span><span style="text-align:right;font-weight:700;">${pe.score}%</span></div>`
-    ).join('');
+    box.innerHTML = `<div class="av-lb-title">Visibility by engine &middot; latest check</div>` + snap.perEngine.map(pe => {
+      const scoreText = pe.score != null ? `${pe.score}%` : (pe.modelScore != null ? `Model-only: ${pe.modelScore}%` : 'Unavailable');
+      const widthVal = pe.score != null ? pe.score : (pe.modelScore != null ? pe.modelScore : 0);
+      return `<div class="av-eng-row"><span>${avEsc(pe.label || pe.engine)}</span><span class="av-eng-track"><span class="av-eng-fill" style="width:${widthVal}%"></span></span><span style="text-align:right;font-weight:700;font-size:12px;">${avEsc(scoreText)}</span></div>`;
+    }).join('');
   }
 
   function avRenderLeaderboard() {
