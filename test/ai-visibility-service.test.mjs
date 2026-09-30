@@ -836,4 +836,221 @@ test('routes preserve user-defined prompts when adding or refreshing approved se
   assert.equal(saved, true);
 });
 
+test('never substitute another service: unmeasured category returns explicit not-yet-measured state without fallback or unrelated trend', async () => {
+  const { registerAiVisibilityRoutes } = require('../lib/ai-visibility-routes.js');
+  const routes = {};
+  const mockApp = {
+    get: (path, ...handlers) => { routes['GET ' + path] = handlers[handlers.length - 1]; },
+    post: (path, ...handlers) => { routes['POST ' + path] = handlers[handlers.length - 1]; },
+  };
+
+  const state = {
+    prompts: ['senior fitness'],
+    snapshots: [
+      {
+        id: 'run_pt_1',
+        date: '2026-09-30',
+        ranAt: '2026-09-30T10:00:00.000Z',
+        serviceCategories: ['personalTraining'],
+        visibilityScore: 90,
+        searchVisibilityScore: 90,
+        shareOfVoice: 70,
+        sentimentScore: 100,
+        leaderboard: [{ name: 'Best Day Fitness', isBrand: true, score: 90, mentions: 9 }],
+        answers: [
+          { serviceCategory: 'personalTraining', prompt: 'senior fitness', engine: 'google', mentioned: true, recommended: true, searchExecuted: true, classificationStatus: 'classified', sentiment: 'positive' },
+        ],
+      },
+    ],
+    updatedAt: '2026-09-30T10:00:00.000Z',
+    lastRun: '2026-09-30T10:00:00.000Z',
+  };
+
+  const { service } = serviceFixture({ state });
+
+  registerAiVisibilityRoutes(mockApp, {
+    requireAuth: (req, res, next) => next(),
+    state,
+    nudgeSchedule: () => {},
+    brandName: () => 'Best Day Fitness',
+    enginesStatus: () => [{ id: 'google', label: 'Google', configured: true }],
+    trend: cat => service.trend(cat),
+    anyConfigured: () => true,
+    runVisibility: async () => ({ ok: true }),
+    usageOverBudget: () => false,
+    budgetBlock: () => {},
+    save: () => {},
+    defaultPrompts: DEFAULT_VIS_PROMPTS,
+    approvedServicePrompts: APPROVED_SERVICE_PROMPTS,
+    promptSetVersion: PROMPT_SET_VERSION,
+  });
+
+  // Query unmeasured category: physicalTherapy
+  let resultPt = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'physicalTherapy' } }, { json: d => { resultPt = d; } });
+
+  assert.equal(resultPt.category, 'physicalTherapy');
+  assert.equal(resultPt.isAllServices, false);
+  assert.ok(resultPt.latest, 'latest must be an explicit not-yet-measured object');
+  assert.equal(resultPt.latest.measured, false, 'measured must be false');
+  assert.equal(resultPt.latest.status, 'not_yet_measured', 'status must be not_yet_measured');
+  assert.equal(resultPt.latest.visibilityScore, null, 'visibilityScore must be null');
+  assert.equal(resultPt.latest.searchVisibilityScore, null, 'searchVisibilityScore must be null');
+  assert.deepEqual(resultPt.latest.serviceCategories, ['physicalTherapy']);
+
+  // Deltas must be null
+  assert.deepEqual(resultPt.deltas, { visibility: null, shareOfVoice: null, sentiment: null });
+
+  // Trend must NOT fall back to personalTraining points!
+  assert.deepEqual(resultPt.trend.dates, [], 'Unmeasured category must have empty trend dates');
+  assert.deepEqual(resultPt.trend.series[0].points, [], 'Unmeasured category must have no trend points');
+
+  // Query "all services" explicitly
+  let resultAll = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'all' } }, { json: d => { resultAll = d; } });
+  assert.equal(resultAll.category, 'all');
+  assert.equal(resultAll.isAllServices, true);
+  assert.equal(resultAll.latest.visibilityScore, 90, 'All services returns the recorded personal training snapshot');
+  assert.equal(resultAll.trend.dates.length, 1);
+});
+
+test('preserve separate monitoring runs: two different services on the same day and repeated runs of same service are all preserved with unique identities', async () => {
+  const state = { prompts: ['test prompt'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { GEMINI_API_KEY: 'test-key' },
+    geminiGenerate: async request => {
+      if (request.config?.tools) {
+        return {
+          text: 'Best Day Fitness in St. Petersburg is highly recommended.',
+          candidates: [{ groundingMetadata: { groundingChunks: [{ web: { title: 'Best Day Fitness', uri: 'https://bestdayfitness.com/' } }] } }],
+        };
+      }
+      return {
+        text: JSON.stringify({
+          mentioned: true,
+          recommended: true,
+          sentiment: 'positive',
+          competitors: [],
+        }),
+      };
+    },
+  });
+
+  // Run 1: consultation
+  const run1 = await service.runVisibility(['google'], { serviceCategories: ['consultation'] });
+  assert.ok(run1.snapshot);
+  const snap1 = run1.snapshot;
+  assert.ok(snap1.id, 'Run 1 must have a unique ID');
+  assert.ok(snap1.timestamp, 'Run 1 must have a timestamp');
+  assert.deepEqual(snap1.serviceCategories, ['consultation']);
+  assert.equal(state.snapshots.length, 1);
+
+  // Run 2: haloredRecovery on the same day
+  const run2 = await service.runVisibility(['google'], { serviceCategories: ['haloredRecovery'] });
+  assert.ok(run2.snapshot);
+  const snap2 = run2.snapshot;
+  assert.ok(snap2.id, 'Run 2 must have a unique ID');
+  assert.notEqual(snap1.id, snap2.id, 'IDs must be unique');
+  assert.deepEqual(snap2.serviceCategories, ['haloredRecovery']);
+
+  // CRITICAL: BOTH runs must remain in state.snapshots on the same day!
+  assert.equal(state.snapshots.length, 2, 'Both consultation and HaloRed runs on same day must be preserved');
+  assert.equal(state.snapshots[0].id, snap1.id);
+  assert.equal(state.snapshots[1].id, snap2.id);
+
+  // Run 3: Repeated consultation run on the same day
+  const run3 = await service.runVisibility(['google'], { serviceCategories: ['consultation'] });
+  assert.ok(run3.snapshot);
+  const snap3 = run3.snapshot;
+  assert.notEqual(snap1.id, snap3.id);
+  assert.equal(state.snapshots.length, 3, 'Repeated run on same day must also be preserved');
+
+  // Verify each is inspectable and correctly attributed
+  assert.deepEqual(state.snapshots[0].serviceCategories, ['consultation']);
+  assert.deepEqual(state.snapshots[1].serviceCategories, ['haloredRecovery']);
+  assert.deepEqual(state.snapshots[2].serviceCategories, ['consultation']);
+});
+
+test('mixed-service results: calculates service-filtered metrics from matching answers rather than combined score', async () => {
+  const { registerAiVisibilityRoutes } = require('../lib/ai-visibility-routes.js');
+  const routes = {};
+  const mockApp = {
+    get: (path, ...handlers) => { routes['GET ' + path] = handlers[handlers.length - 1]; },
+    post: (path, ...handlers) => { routes['POST ' + path] = handlers[handlers.length - 1]; },
+  };
+
+  // Create a mixed-service snapshot where:
+  // - 2 personalTraining answers: both recommended (100% visibility)
+  // - 2 physicalTherapy answers: neither recommended (0% visibility)
+  // - Combined score = 50% (2 of 4)
+  const mixedSnapshot = {
+    id: 'run_mixed_1',
+    date: '2026-09-30',
+    ranAt: '2026-09-30T12:00:00.000Z',
+    timestamp: '2026-09-30T12:00:00.000Z',
+    serviceCategories: ['personalTraining', 'physicalTherapy'],
+    engines: ['google'],
+    visibilityScore: 50,
+    searchVisibilityScore: 50,
+    modelOnlyVisibilityScore: null,
+    shareOfVoice: 50,
+    sentimentScore: 100,
+    answers: [
+      { engine: 'google', prompt: 'pt query 1', serviceCategory: 'personalTraining', searchExecuted: true, classificationStatus: 'classified', mentioned: true, recommended: true, sentiment: 'positive', competitors: [] },
+      { engine: 'google', prompt: 'pt query 2', serviceCategory: 'personalTraining', searchExecuted: true, classificationStatus: 'classified', mentioned: true, recommended: true, sentiment: 'positive', competitors: [] },
+      { engine: 'google', prompt: 'pt query 3', serviceCategory: 'physicalTherapy', searchExecuted: true, classificationStatus: 'classified', mentioned: true, recommended: false, sentiment: 'neutral', competitors: ['Competitor Clinic'] },
+      { engine: 'google', prompt: 'pt query 4', serviceCategory: 'physicalTherapy', searchExecuted: true, classificationStatus: 'classified', mentioned: false, recommended: false, sentiment: 'absent', competitors: ['Competitor Clinic'] },
+    ],
+  };
+
+  const state = {
+    prompts: [],
+    snapshots: [mixedSnapshot],
+    updatedAt: '2026-09-30T12:00:00.000Z',
+    lastRun: '2026-09-30T12:00:00.000Z',
+  };
+
+  const { service } = serviceFixture({ state });
+
+  registerAiVisibilityRoutes(mockApp, {
+    requireAuth: (req, res, next) => next(),
+    state,
+    nudgeSchedule: () => {},
+    brandName: () => 'Best Day Fitness',
+    enginesStatus: () => [{ id: 'google', label: 'Google', configured: true }],
+    trend: cat => service.trend(cat),
+    anyConfigured: () => true,
+    runVisibility: async () => ({ ok: true }),
+    usageOverBudget: () => false,
+    budgetBlock: () => {},
+    save: () => {},
+    defaultPrompts: DEFAULT_VIS_PROMPTS,
+    approvedServicePrompts: APPROVED_SERVICE_PROMPTS,
+    promptSetVersion: PROMPT_SET_VERSION,
+  });
+
+  // Query category=personalTraining -> must calculate 100% from its 2 matching answers
+  let ptRes = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'personalTraining' } }, { json: d => { ptRes = d; } });
+  assert.equal(ptRes.category, 'personalTraining');
+  assert.equal(ptRes.latest.visibilityScore, 100, 'personalTraining service-filtered score must be 100%');
+  assert.equal(ptRes.latest.answers.length, 2);
+
+  // Query category=physicalTherapy -> must calculate 0% from its 2 matching answers
+  let physRes = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'physicalTherapy' } }, { json: d => { physRes = d; } });
+  assert.equal(physRes.category, 'physicalTherapy');
+  assert.equal(physRes.latest.visibilityScore, 0, 'physicalTherapy service-filtered score must be 0%');
+  assert.equal(physRes.latest.answers.length, 2);
+
+  // Query all services -> returns combined score of 50%
+  let allRes = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'all' } }, { json: d => { allRes = d; } });
+  assert.equal(allRes.category, 'all');
+  assert.equal(allRes.latest.visibilityScore, 50, 'All services returns the combined 50% score');
+  assert.equal(allRes.latest.answers.length, 4);
+});
+
+
 

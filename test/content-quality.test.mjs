@@ -244,3 +244,49 @@ test('evaluateWebsiteAudit integrates contentQuality check and surfaces content 
   assert.ok(audit.recommendations.some(r => r.area === 'Content Quality & Governance'));
   assert.ok(audit.recommendations.some(r => r.action.includes('medical-grade') || r.action.includes('Resolve content blocker')));
 });
+
+test('distinguishes single-session and monthly pricing: approved statement verifies all three offers independently without violations', () => {
+  const statementHtml = `
+    <div>
+      <h1>HaloRed Recovery Lounge</h1>
+      <p>By appointment only in St. Petersburg, FL. Public HaloRed single sessions cost $39.99 for 15 minutes. Active member monthly plan $299. Public monthly plan $399.</p>
+      <h2>What is HaloRed recovery?</h2>
+      <p>A private recovery booth combining full-body red light and dry salt aerosol halotherapy. Our dedicated recovery environment helps seniors and active adults relax, recover cellular energy, and improve respiratory wellness in a comfortable barefoot environment.</p>
+      <h2>How do appointments work?</h2>
+      <p>All sessions must be scheduled in advance with our Client Experience Team. Base sessions run fifteen minutes, and members can add time as needed during their scheduled visit.</p>
+      <ul><li>15-minute sessions</li><li>Active member savings</li></ul>
+      <a href="/book">Book Your Recovery Session</a>
+    </div>
+  `;
+  const result = assessPageQuality(statementHtml, { pageType: 'halored' });
+
+  // Zero prohibited claims violations
+  assert.deepEqual(result.claimsViolations, []);
+  assert.equal(result.publishable, true);
+
+  // All three offers verified independently
+  assert.ok(result.verifiedFacts.some(f => f.includes('$39.99')), 'Must verify $39.99 single session');
+  assert.ok(result.verifiedFacts.includes('Member recovery plan ($299/mo)'), 'Must verify $299 member monthly plan');
+  assert.ok(result.verifiedFacts.includes('Public guest recovery plan ($399/mo)'), 'Must verify $399 public monthly plan');
+});
+
+test('ambiguous recovery pricing reports needs review instead of an incorrect factual violation', () => {
+  const ambiguousHtml = `
+    <div>
+      <h1>HaloRed Recovery Lounge</h1>
+      <p>By appointment only in St. Petersburg, FL. Public HaloRed sessions cost $50 per visit.</p>
+      <h2>What is HaloRed recovery?</h2>
+      <p>A private recovery booth combining full-body red light and dry salt aerosol halotherapy.</p>
+      <ul><li>Drop-in sessions</li></ul>
+      <a href="/book">Book Now</a>
+    </div>
+  `;
+  const result = assessPageQuality(ambiguousHtml, { pageType: 'halored' });
+
+  // Not a hard claims violation (does not assert an incorrect monthly plan)
+  assert.equal(result.claimsViolations.some(v => v.includes('incorrect public recovery plan pricing')), false);
+  // Reported in flaggedForReview for editorial review
+  assert.ok(result.flaggedForReview.some(f => f.reason === 'ambiguous_pricing_context'),
+    'Expected flaggedForReview with ambiguous_pricing_context');
+});
+

@@ -392,7 +392,7 @@
     if (!avState) return;
     avRenderEngines();
     const anyConfigured = avState.anyConfigured;
-    const hasData = !!avState.latest;
+    const hasData = !!avState.latest && avState.latest.measured !== false && avState.latest.status !== 'not_yet_measured';
     const emptyEl = avEl('av-empty'), mainEl = avEl('av-main');
     // auto-weekly toggle + running state
     const autoBox = avEl('av-auto'); if (autoBox) autoBox.checked = !!avState.autoEnabled;
@@ -406,9 +406,16 @@
     if (!hasData) {
       mainEl.style.display = 'none';
       emptyEl.style.display = '';
-      emptyEl.innerHTML = anyConfigured
-        ? `Track how often <b>${avEsc(avState.brand)}</b> is recommended across AI answer engines. Click <b>Run AI visibility check</b> to run your tracked prompts across ${avState.engines.filter(e => e.configured).map(e => e.label).join(', ')} and build your first score.`
-        : `No AI engines are connected yet. Add <b>GEMINI_API_KEY</b> in Settings/Railway to check Google's AI now — and <b>OPENAI_API_KEY</b> / <b>PERPLEXITY_API_KEY</b> to also track ChatGPT and Perplexity. Each engine lights up automatically once its key is set.`;
+      const catLabel = (avState.serviceCategory && avState.serviceCategory !== 'all') ? avState.serviceCategory : '';
+      if (catLabel) {
+        emptyEl.innerHTML = anyConfigured
+          ? `Track AI visibility for <b>${avEsc(catLabel)}</b>. No checks have been recorded for this service category yet. Click <b>Run AI visibility check</b> to evaluate your ${avEsc(catLabel)} prompts.`
+          : `No AI engines are connected yet. Add <b>GEMINI_API_KEY</b> in Settings/Railway to check Google's AI now.`;
+      } else {
+        emptyEl.innerHTML = anyConfigured
+          ? `Track how often <b>${avEsc(avState.brand)}</b> is recommended across AI answer engines. Click <b>Run AI visibility check</b> to run your tracked prompts across ${avState.engines.filter(e => e.configured).map(e => e.label).join(', ')} and build your first score.`
+          : `No AI engines are connected yet. Add <b>GEMINI_API_KEY</b> in Settings/Railway to check Google's AI now — and <b>OPENAI_API_KEY</b> / <b>PERPLEXITY_API_KEY</b> to also track ChatGPT and Perplexity. Each engine lights up automatically once its key is set.`;
+      }
       return;
     }
     emptyEl.style.display = 'none';
@@ -434,6 +441,9 @@
     try {
       const filterEl = avEl('av-service-filter');
       const cat = category !== undefined ? category : (filterEl ? filterEl.value : 'all');
+      if (filterEl && category !== undefined && filterEl.value !== category) {
+        filterEl.value = category;
+      }
       const url = cat && cat !== 'all' ? `/api/ai-visibility?category=${encodeURIComponent(cat)}` : '/api/ai-visibility';
       const res = await fetch(url);
       avState = await res.json();
@@ -451,9 +461,23 @@
     if (avPollTimer) return;
     avPollTimer = setInterval(async () => {
       try {
-        const r = await fetch('/api/ai-visibility'); const d = await r.json();
-        if (!d.running) { clearInterval(avPollTimer); avPollTimer = null; const rb = avEl('av-run'); if (rb) delete rb.dataset.busy; avState = d; avRender(); }
-      } catch (e) { clearInterval(avPollTimer); avPollTimer = null; }
+        const filterEl = avEl('av-service-filter');
+        const cat = filterEl ? filterEl.value : 'all';
+        const url = cat && cat !== 'all' ? `/api/ai-visibility?category=${encodeURIComponent(cat)}` : '/api/ai-visibility';
+        const r = await fetch(url);
+        const d = await r.json();
+        if (!d.running) {
+          clearInterval(avPollTimer);
+          avPollTimer = null;
+          const rb = avEl('av-run');
+          if (rb) delete rb.dataset.busy;
+          avState = d;
+          avRender();
+        }
+      } catch (e) {
+        clearInterval(avPollTimer);
+        avPollTimer = null;
+      }
     }, 5000);
   }
 
