@@ -104,7 +104,90 @@ test('evidence with exitStatus: 1 and no error string is labeled unavailable, no
 
   assert.equal(audit.checks.geoOptimizer.status, 'unavailable');
   assert.equal(audit.checks.geoOptimizer.score, null);
-  assert.ok(audit.checks.geoOptimizer.error.includes('non-zero exit status: 1'));
+  assert.ok(audit.checks.geoOptimizer.error.includes('non-zero exit code: 1'));
+});
+
+test('evidence with exitStatus: 2 and 130 is normalized as failure with score: null and preserved exitCode', () => {
+  const dummyMeta = { bytes: 100, headings: { h1Texts: [] }, assets: {}, schemaBlocks: [], malformedJsonLd: [] };
+
+  // Exit status 2 (misuse of shell built-in or syntax error)
+  const audit2 = evaluateWebsiteAudit('https://bestdayfitness.com', dummyMeta, {
+    geoEvidence: {
+      url: 'https://bestdayfitness.com',
+      timestamp: '2026-09-30T14:12:47.000Z',
+      score: 42, // Non-null score in raw evidence must NOT be retained on failed exit!
+      exitStatus: 2,
+    },
+  });
+  assert.equal(audit2.checks.geoOptimizer.status, 'unavailable');
+  assert.equal(audit2.checks.geoOptimizer.score, null);
+  assert.equal(audit2.score, null);
+  assert.equal(audit2.checks.geoOptimizer.exitCode, 2);
+  assert.equal(audit2.checks.geoOptimizer.exitStatus, 'failed');
+
+  // Exit status 130 (Script terminated by Control-C / SIGINT)
+  const audit130 = evaluateWebsiteAudit('https://bestdayfitness.com', dummyMeta, {
+    geoEvidence: {
+      url: 'https://bestdayfitness.com',
+      timestamp: '2026-09-30T14:12:47.000Z',
+      score: 75,
+      exitStatus: 130,
+    },
+  });
+  assert.equal(audit130.checks.geoOptimizer.status, 'unavailable');
+  assert.equal(audit130.checks.geoOptimizer.score, null);
+  assert.equal(audit130.score, null);
+  assert.equal(audit130.checks.geoOptimizer.exitCode, 130);
+  assert.equal(audit130.checks.geoOptimizer.exitStatus, 'failed');
+});
+
+test('validateGeoEvidence rejects contradictory, unsupported, or insufficient status fields', () => {
+  // Contradictory: exitCode: 0 but exitStatus: 2
+  const r1 = validateGeoEvidence({
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    exitCode: 0,
+    exitStatus: 2,
+  });
+  assert.equal(r1.valid, false);
+  assert.ok(r1.error.includes('Conflicting exitCode'));
+
+  // Contradictory: exitCode: 0 but exitStatus: 'failed'
+  const r2 = validateGeoEvidence({
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    exitCode: 0,
+    exitStatus: 'failed',
+  });
+  assert.equal(r2.valid, false);
+  assert.ok(r2.error.includes('Contradictory status'));
+
+  // Contradictory: exitCode: 1 but exitStatus: 'success'
+  const r3 = validateGeoEvidence({
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    exitCode: 1,
+    exitStatus: 'success',
+  });
+  assert.equal(r3.valid, false);
+  assert.ok(r3.error.includes('Contradictory status'));
+
+  // Unsupported exitStatus string
+  const r4 = validateGeoEvidence({
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    exitStatus: 'partially_working',
+  });
+  assert.equal(r4.valid, false);
+  assert.ok(r4.error.includes('Unsupported exitStatus value'));
+
+  // Insufficient status information (no code, status, error, or checks)
+  const r5 = validateGeoEvidence({
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+  });
+  assert.equal(r5.valid, false);
+  assert.ok(r5.error.includes('insufficient status information'));
 });
 
 test('exitCode: 0 is preserved without truthiness falsy default replacement', () => {
@@ -377,4 +460,126 @@ test('isApprovedAuditTarget restricts localhost in production mode and revalidat
   const evilCheck = isApprovedAuditTarget('https://malicious-site.com/exploit');
   assert.equal(evilCheck.ok, false);
   assert.ok(evilCheck.error.includes('Disallowed target host'));
+});
+
+// --- 7. REAL PROVIDER RUNTIME & STREAMING SAFEGUARDS ---
+
+test('real provider adapter handles manual redirect revalidation and blocks redirect to unapproved domain', async () => {
+  const { createServer } = await import('node:http');
+  const { createProviderRuntime } = await import('../lib/provider-runtime.js');
+
+  const server = createServer((req, res) => {
+    if (req.url === '/redirect-evil') {
+      res.writeHead(302, { Location: 'https://evil-unapproved-site.com/steal' });
+      res.end();
+    } else {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end('<!DOCTYPE html><html><head><title>Ok</title></head><body><h1>Ok</h1></body></html>');
+    }
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    const runtime = createProviderRuntime();
+    runtime.setConfigured('web-audit', true);
+
+    const persistedState = { latest: null, updatedAt: null, history: [], evidence: {} };
+    const service = createWebsiteAuditService({
+      state: persistedState,
+      save: () => {},
+      providerRuntime: runtime,
+      allowLocalTargets: true,
+    });
+
+    const res = await service.run(`http://127.0.0.1:${port}/redirect-evil`);
+    assert.equal(res.ok, false);
+    assert.ok(res.error.includes('Redirect blocked'));
+    assert.equal(persistedState.latest.status, 'unavailable');
+    assert.equal(persistedState.latest.score, null);
+    assert.equal(persistedState.history.length, 1);
+    assert.equal(persistedState.history[0].crawlStatus, 'unavailable');
+  } finally {
+    server.close();
+  }
+});
+
+test('real provider adapter handles non-2xx error and records failure in history with score: null', async () => {
+  const { createServer } = await import('node:http');
+  const { createProviderRuntime } = await import('../lib/provider-runtime.js');
+
+  const server = createServer((req, res) => {
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('Internal Server Error');
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    const runtime = createProviderRuntime();
+    runtime.setConfigured('web-audit', true);
+
+    const persistedState = { latest: null, updatedAt: null, history: [], evidence: {} };
+    const service = createWebsiteAuditService({
+      state: persistedState,
+      save: () => {},
+      providerRuntime: runtime,
+      allowLocalTargets: true,
+    });
+
+    const res = await service.run(`http://127.0.0.1:${port}/broken-endpoint`);
+    assert.equal(res.ok, false);
+    assert.ok(res.error.includes('HTTP 500'));
+    assert.equal(persistedState.latest.status, 'unavailable');
+    assert.equal(persistedState.latest.score, null);
+    assert.equal(persistedState.history.length, 1);
+    assert.equal(persistedState.history[0].crawlStatus, 'unavailable');
+    assert.ok(persistedState.history[0].error.includes('HTTP 500'));
+  } finally {
+    server.close();
+  }
+});
+
+test('real provider adapter enforces streaming byte limit on Web ReadableStream and cancels stream', async () => {
+  const { createServer } = await import('node:http');
+  const { createProviderRuntime } = await import('../lib/provider-runtime.js');
+
+  const oneMbChunk = Buffer.alloc(1024 * 1024, 'a');
+  let clientAborted = false;
+
+  const server = createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    req.on('close', () => { clientAborted = true; });
+    for (let i = 0; i < 27; i++) {
+      res.write(oneMbChunk);
+    }
+    res.end();
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    const runtime = createProviderRuntime();
+    runtime.setConfigured('web-audit', true);
+
+    const persistedState = { latest: null, updatedAt: null, history: [], evidence: {} };
+    const service = createWebsiteAuditService({
+      state: persistedState,
+      save: () => {},
+      providerRuntime: runtime,
+      allowLocalTargets: true,
+    });
+
+    const res = await service.run(`http://127.0.0.1:${port}/large-stream`);
+    assert.equal(res.ok, false);
+    assert.ok(res.error.includes('exceeded maximum allowed response limit') || res.error.includes('streaming'));
+    assert.equal(persistedState.latest.status, 'unavailable');
+    assert.equal(persistedState.latest.score, null);
+    assert.equal(persistedState.history.length, 1);
+  } finally {
+    server.close();
+  }
 });

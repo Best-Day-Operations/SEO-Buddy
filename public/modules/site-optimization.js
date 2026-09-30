@@ -301,7 +301,11 @@
 
     // Crawl status badge
     let crawlBadge = '';
-    if (crawl.status === 'PROTECTED_STAGING') {
+    const isAuditUnavailable = data.status === 'unavailable' || crawl.status === 'unavailable';
+
+    if (isAuditUnavailable) {
+      crawlBadge = '<span class="badge" style="background:rgba(245,158,11,0.15);color:var(--color-warning);padding:2px 8px;border-radius:4px;">Audit Unavailable (Fetch Failed)</span>';
+    } else if (crawl.status === 'PROTECTED_STAGING') {
       crawlBadge = '<span class="badge" style="background:rgba(16,185,129,0.15);color:var(--color-success);padding:2px 8px;border-radius:4px;">Protected Staging (noindex active)</span>';
     } else if (crawl.status === 'EXPOSED_STAGING_WARNING') {
       crawlBadge = '<span class="badge" style="background:rgba(239,68,68,0.15);color:var(--color-accent);padding:2px 8px;border-radius:4px;">Warning: Staging Missing noindex</span>';
@@ -340,6 +344,25 @@
       '</div>';
     }).join('') : '<div class="text-muted" style="font-size:var(--font-xs);">No high-priority recommendations at this time.</div>';
 
+    const titleHtml = isAuditUnavailable
+      ? '<span class="text-muted">Unavailable (fetch failed)</span>'
+      : (meta.hasTitle ? '<span style="color:var(--color-success)">✓ (' + meta.titleLength + ' chars)</span>' : '<span style="color:var(--color-accent)">✗ MISSING</span>');
+    const descHtml = isAuditUnavailable
+      ? '<span class="text-muted">Unavailable (fetch failed)</span>'
+      : (meta.hasDescription ? '<span style="color:var(--color-success)">✓ (' + meta.descriptionLength + ' chars)</span>' : '<span style="color:var(--color-accent)">✗ MISSING</span>');
+    const canonHtml = isAuditUnavailable
+      ? '<span class="text-muted">Unavailable (fetch failed)</span>'
+      : (meta.hasCanonical ? citEsc(meta.canonicalUrl) : 'None declared');
+    const schemaBlocksHtml = isAuditUnavailable
+      ? '<span class="text-muted">Unavailable</span>'
+      : '<b>' + (schema.blockCount || 0) + '</b> (' + (schema.entityCount || 0) + ' entities)';
+    const hoursHtml = isAuditUnavailable
+      ? '<span class="text-muted">Unavailable</span>'
+      : (schema.hoursCompliant ? '<span style="color:var(--color-success)">✓ 7 Days Compliant</span>' : '<span style="color:var(--color-accent)">✗ Non-compliant/Missing</span>');
+    const payloadHtml = isAuditUnavailable
+      ? '<span class="text-muted">Unavailable</span>'
+      : '<b>' + (perf.sizeMegabytes || '0.00') + ' MB</b>';
+
     auditResultsContainer.innerHTML = [
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--border-color);margin-bottom:12px;">',
         '<div><strong>Target:</strong> <span style="font-family:monospace;font-size:var(--font-xs);">' + citEsc(data.targetUrl || checks.url || '') + '</span></div>',
@@ -348,25 +371,25 @@
       '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:12px;margin-bottom:16px;">',
         '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;padding:10px;">',
           '<div style="font-size:var(--font-xs);font-weight:600;color:var(--text-muted);">Crawlability &amp; Robots</div>',
-          '<div style="font-size:var(--font-sm);margin-top:4px;">' + citEsc(crawl.observedRobots || 'None') + '</div>',
-          '<div style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px;">' + citEsc(crawl.explanation || '') + '</div>',
+          '<div style="font-size:var(--font-sm);margin-top:4px;">' + citEsc(crawl.observedRobots || (isAuditUnavailable ? 'Unavailable (fetch failed)' : 'None')) + '</div>',
+          '<div style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px;">' + citEsc(crawl.explanation || (isAuditUnavailable ? (data.error || 'Fetch failed') : '')) + '</div>',
         '</div>',
         '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;padding:10px;">',
           '<div style="font-size:var(--font-xs);font-weight:600;color:var(--text-muted);">Strict Head Metadata</div>',
-          '<div style="font-size:var(--font-sm);margin-top:4px;">Title: ' + (meta.hasTitle ? '<span style="color:var(--color-success)">✓ (' + meta.titleLength + ' chars)</span>' : '<span style="color:var(--color-accent)">✗ MISSING</span>') + '</div>',
-          '<div style="font-size:var(--font-sm);">Description: ' + (meta.hasDescription ? '<span style="color:var(--color-success)">✓ (' + meta.descriptionLength + ' chars)</span>' : '<span style="color:var(--color-accent)">✗ MISSING</span>') + '</div>',
-          '<div style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px;">Canonical: ' + (meta.hasCanonical ? citEsc(meta.canonicalUrl) : 'None declared') + '</div>',
+          '<div style="font-size:var(--font-sm);margin-top:4px;">Title: ' + titleHtml + '</div>',
+          '<div style="font-size:var(--font-sm);">Description: ' + descHtml + '</div>',
+          '<div style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px;">Canonical: ' + canonHtml + '</div>',
         '</div>',
         '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;padding:10px;">',
           '<div style="font-size:var(--font-xs);font-weight:600;color:var(--text-muted);">Structured Data &amp; Schema</div>',
-          '<div style="font-size:var(--font-sm);margin-top:4px;">Schema blocks: <b>' + (schema.blockCount || 0) + '</b> (' + (schema.entityCount || 0) + ' entities)</div>',
-          '<div style="font-size:var(--font-xs);margin-top:4px;">Approved hours: ' + (schema.hoursCompliant ? '<span style="color:var(--color-success)">✓ 7 Days Compliant</span>' : '<span style="color:var(--color-accent)">✗ Non-compliant/Missing</span>') + '</div>',
+          '<div style="font-size:var(--font-sm);margin-top:4px;">Schema blocks: ' + schemaBlocksHtml + '</div>',
+          '<div style="font-size:var(--font-xs);margin-top:4px;">Approved hours: ' + hoursHtml + '</div>',
           (schema.malformedCount ? '<div style="font-size:var(--font-xs);color:var(--color-accent);margin-top:2px;">⚠ ' + schema.malformedCount + ' malformed JSON-LD block(s)</div>' : ''),
         '</div>',
         '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;padding:10px;">',
           '<div style="font-size:var(--font-xs);font-weight:600;color:var(--text-muted);">Performance &amp; Asset Bloat</div>',
-          '<div style="font-size:var(--font-sm);margin-top:4px;">Payload size: <b>' + (perf.sizeMegabytes || '0.00') + ' MB</b></div>',
-          '<div style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px;">Inlined scripts: ' + (perf.scriptCount || 0) + ' &bull; Base64 images: ' + (perf.base64Count || 0) + '</div>',
+          '<div style="font-size:var(--font-sm);margin-top:4px;">Payload size: ' + payloadHtml + '</div>',
+          '<div style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px;">Inlined scripts: ' + (isAuditUnavailable ? 'Unavailable' : (perf.scriptCount || 0) + ' &bull; Base64 images: ' + (perf.base64Count || 0)) + '</div>',
           (perf.isOversized ? '<div style="font-size:var(--font-xs);color:var(--color-warning);margin-top:2px;">⚠ Exceeds 10MB parser limit</div>' : ''),
         '</div>',
       '</div>',
