@@ -390,11 +390,8 @@ async function runBrowserAcceptance() {
     console.log('API verified: physicalTherapy returned explicit not-yet-measured state without fallback.');
 
     // 2. UI interaction & filter persistence
-    await page.evaluate(() => {
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-      const aio = document.getElementById('aio-tab');
-      if (aio) aio.classList.add('active');
-    });
+    await page.evaluate(() => window.switchTab('aio-tab'));
+    await page.waitForFunction(() => typeof window.loadAiVisibility === 'function', { timeout: 15000 });
     await pause(200);
 
     const filterExists = await page.$('#av-service-filter');

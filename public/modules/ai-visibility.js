@@ -410,7 +410,7 @@
       if (catLabel) {
         emptyEl.innerHTML = anyConfigured
           ? `Track AI visibility for <b>${avEsc(catLabel)}</b>. No checks have been recorded for this service category yet. Click <b>Run AI visibility check</b> to evaluate your ${avEsc(catLabel)} prompts.`
-          : `No AI engines are connected yet. Add <b>GEMINI_API_KEY</b> in Settings/Railway to check Google's AI now.`;
+          : `Track AI visibility for <b>${avEsc(catLabel)}</b>. No AI engines are connected yet. Add <b>GEMINI_API_KEY</b> in Settings/Railway to check Google's AI now.`;
       } else {
         emptyEl.innerHTML = anyConfigured
           ? `Track how often <b>${avEsc(avState.brand)}</b> is recommended across AI answer engines. Click <b>Run AI visibility check</b> to run your tracked prompts across ${avState.engines.filter(e => e.configured).map(e => e.label).join(', ')} and build your first score.`
