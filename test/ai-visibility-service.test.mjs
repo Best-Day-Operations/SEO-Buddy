@@ -222,3 +222,134 @@ test('scheduled and manual visibility work share one overlap guard and recover a
   assert.equal(saves.length, 2, 'a later scheduled run can persist after recovery');
   assert.equal(service.running, false);
 });
+
+test('OpenAI web search adapter extracts citation evidence from annotations and citations payload', async () => {
+  const { service, fetchCalls } = serviceFixture({
+    env: { OPENAI_API_KEY: 'openai-secret' },
+    providerRuntime: {
+      fetch: async (...args) => {
+        fetchCalls.push(args);
+        return {
+          json: async () => ({
+            choices: [{
+              message: {
+                content: 'Best Day Fitness is recommended in St. Petersburg.',
+                annotations: [
+                  { url_citation: { url: 'https://bestdayfitness.com/consultation', title: 'Consultation' } },
+                ],
+              },
+            }],
+            citations: ['https://bestdayfitnessreviews.com'],
+          }),
+        };
+      },
+    },
+  });
+
+  const res = await service.askEngine('openai', 'senior fitness St Petersburg');
+  assert.equal(res.ok, true);
+  assert.match(res.answer, /Best Day Fitness/);
+  assert.deepEqual(res.sources, [
+    { title: '', uri: 'https://bestdayfitnessreviews.com' },
+    { title: 'Consultation', uri: 'https://bestdayfitness.com/consultation' },
+  ]);
+  const reqBody = JSON.parse(fetchCalls[0][2].body);
+  assert.deepEqual(reqBody.tools, [{ type: 'web_search_preview' }]);
+});
+
+test('mentions and recommendations are classified independently; negative mentions strictly force recommended: false', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        json: async () => ({
+          choices: [{ message: { content: 'Best Day Fitness has received complaints about parking.' } }],
+          citations: ['https://bestdayfitness.com'],
+        }),
+      }),
+    },
+    geminiGenerate: async request => {
+      // Mock Gemini returning mentioned: true, sentiment: negative, but incorrectly attempting recommended: true
+      return {
+        text: JSON.stringify({
+          mentioned: true,
+          recommended: true, // Should be overridden to false by invariant
+          sentiment: 'negative',
+          competitors: ['Other Gym'],
+        }),
+      };
+    },
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.brandMentions, 1, 'brand was mentioned');
+  assert.equal(snapshot.brandRecommendations, 0, 'negative mention must NEVER become a recommendation');
+  assert.equal(snapshot.visibilityScore, 0, 'visibility score reflects recommendations, not negative mentions');
+  assert.equal(snapshot.answers[0].mentioned, true);
+  assert.equal(snapshot.answers[0].recommended, false);
+  assert.equal(snapshot.answers[0].sentiment, 'negative');
+  assert.equal(snapshot.measurementSurface, 'api_model_evaluation');
+  assert.match(snapshot.methodology, /Developer API model evaluation/);
+});
+
+test('citation URL matching uses validated hostnames rather than brand substrings in paths or titles', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        json: async () => ({
+          choices: [{ message: { content: 'Visit Rival Fitness.' } }],
+          // Source 1 has brandRoot in the URL pathname on an unauthorized host
+          // Source 2 has the brand name in the title on an unauthorized host
+          // Source 3 has an authorized hostname
+          citations: [
+            'https://competitor.example/articles/bestdayfitness-review',
+          ],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: false,
+        recommended: false,
+        sentiment: 'absent',
+        competitors: ['Rival Fitness'],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.answers[0].cited, false, 'brandRoot in path on competitor domain must NOT count as citation');
+
+  // Now verify with authorized domain
+  const state2 = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service: service2 } = serviceFixture({
+    state: state2,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        json: async () => ({
+          choices: [{ message: { content: 'Best Day Fitness is at 6619 1st Ave S.' } }],
+          citations: ['https://bestdayfitness.com/about'],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: true,
+        recommended: true,
+        sentiment: 'positive',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const res2 = await service2.runVisibility(['openai']);
+  assert.equal(res2.snapshot.answers[0].cited, true, 'validated hostname matches citation');
+  assert.equal(res2.snapshot.answers[0].citedSources[0].uri, 'https://bestdayfitness.com/about');
+});
+

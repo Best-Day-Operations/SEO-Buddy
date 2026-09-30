@@ -1809,6 +1809,7 @@ const reviewsService = createReviewsService({
   initialSnapshots: reviewsSnapshots,
   saveSnapshots: snapshots => saveJsonFileSync(REVIEWS_SNAPSHOTS_FILE, snapshots, 'Reviews snapshot'),
   getReviewsUrl: () => process.env.REVIEWS_URL || 'https://bestdayfitnessreviews.com',
+  getReviewsApiUrl: () => process.env.REVIEWS_API_URL || `${(process.env.REVIEWS_URL || 'https://bestdayfitnessreviews.com').replace(/\/+$/, '')}/api/reviews`,
   getTrustpilotSettings: () => ({
     apiKey: process.env.TRUSTPILOT_API_KEY,
     domain: process.env.TRUSTPILOT_DOMAIN,
