@@ -647,7 +647,7 @@
             <span class="av-updated" id="av-updated"></span>
             <label class="av-auto" title="Automatically re-run once a week so your trend fills in on its own"><span class="av-switch"><input type="checkbox" id="av-auto"><span class="av-slider"></span></span><span>Auto weekly</span></label>
             <button class="av-linkbtn" id="av-edit-prompts" type="button">Edit prompts</button>
-            <select id="av-service-filter" class="form-input" style="width:auto;display:inline-block;padding:2px 8px;font-size:12px;margin-right:6px;height:28px;">
+            <select id="av-service-filter" class="form-input" aria-label="Filter AI visibility by service category" style="width:auto;display:inline-block;padding:2px 8px;font-size:12px;margin-right:6px;height:28px;">
               <option value="all">All Service Categories</option>
               <option value="personalTraining">Personal Training</option>
               <option value="consultation">Consultation ($99 / 45-min)</option>
@@ -1134,8 +1134,8 @@
           </div>
 
           <div style="margin-top:12px;">
-            <label style="font-size:var(--font-xs);font-weight:600;display:block;margin-bottom:4px;">GHL Header Tracking Code (Paste into GHL Page Builder &rarr; Settings &rarr; Tracking Code &rarr; Header)</label>
-            <textarea id="ghl-snippet-output" class="os-schema-box" readonly style="min-height:220px;font-family:monospace;font-size:0.75rem;"></textarea>
+            <label for="ghl-snippet-output" style="font-size:var(--font-xs);font-weight:600;display:block;margin-bottom:4px;">GHL Header Tracking Code (Paste into GHL Page Builder &rarr; Settings &rarr; Tracking Code &rarr; Header)</label>
+            <textarea id="ghl-snippet-output" class="os-schema-box" readonly aria-label="GHL Header Tracking Code" style="min-height:220px;font-family:monospace;font-size:0.75rem;"></textarea>
           </div>
           <div class="text-muted" style="font-size:var(--font-xs);margin-top:8px;">
             &#9432; <strong>Staging Preview Procedure:</strong> Paste snippet into GHL Builder header tracking code, click <em>Save</em> in the builder, and review via preview link. Do not publish to live production domain until owner launch authorization.
