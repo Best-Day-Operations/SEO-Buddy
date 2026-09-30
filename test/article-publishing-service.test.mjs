@@ -335,3 +335,56 @@ test('factual validation rejects prohibited claims or invalid facts inside autho
   );
 });
 
+test('consultation pricing validation strictly rejects $200 current price and fractional prices while allowing approved $99 normally $200 wording', async () => {
+  const testCase = fixture();
+
+  // "Consultation costs $200" must fail (it is claiming current price is $200)
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Consultation costs $200.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // "Consultation fee is $200" must fail
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Our consultation fee is $200.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // "Consultation costs $99.95" must fail (must be exact $99)
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Consultation costs $99.95.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // "Consultations cost $99.50" must fail
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Consultations cost $99.50.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // Approved wording: $99, normally $200 must pass cleanly
+  const approvedWording1 = await testCase.service.publish(
+    'Getting Started',
+    '<p>Book a 45-minute consultation for $99 (normally $200). 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(approvedWording1.success, true);
+
+  // Approved wording: $99 (regularly $200 value) must pass cleanly
+  const approvedWording2 = await testCase.service.publish(
+    'Getting Started',
+    '<p>Consultations are $99, regularly a $200 value. 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(approvedWording2.success, true);
+
+  // Personal training 60-minute and 30-minute descriptions remain completely unaffected
+  const ptWording = await testCase.service.publish(
+    'Personal Training Options',
+    '<p>Personal training sessions are normally 60 minutes, with 30-minute sessions available. We offer 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(ptWording.success, true);
+});
+
+

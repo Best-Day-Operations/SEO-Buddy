@@ -245,27 +245,28 @@ test('OpenAI web search adapter validates Responses endpoint, tools contract, se
           status: 200,
           json: async () => ({
             id: 'resp_123',
-            output_text: 'Best Day Fitness is recommended in St. Petersburg for longevity training.',
+            output_text: null, // Test that output_text is parsed from message content type 'output_text'
             output: [
+              {
+                type: 'web_search_call',
+                status: 'completed',
+                action: {
+                  sources: [
+                    { url: 'https://competitor.example/directory', title: 'Gym Directory' },
+                  ],
+                },
+              },
               {
                 type: 'message',
                 content: [
                   {
-                    type: 'text',
+                    type: 'output_text',
                     text: 'Best Day Fitness is recommended in St. Petersburg for longevity training.',
                     annotations: [
                       { type: 'url_citation', url: 'https://bestdayfitness.com/consultation', title: 'Consultation' },
                     ],
                   },
                 ],
-              },
-              {
-                type: 'web_search_call',
-                action: {
-                  sources: [
-                    { url: 'https://bestdayfitnessreviews.com', title: 'Client Reviews' },
-                  ],
-                },
               },
             ],
           }),
@@ -278,9 +279,15 @@ test('OpenAI web search adapter validates Responses endpoint, tools contract, se
   assert.equal(res.ok, true);
   assert.equal(res.searchExecuted, true, 'search execution evidence captured');
   assert.match(res.answer, /Best Day Fitness/);
+  // Inline citations are kept separate from searchSources
+  assert.deepEqual(res.citations, [
+    { title: 'Consultation', uri: 'https://bestdayfitness.com/consultation' },
+  ]);
+  assert.deepEqual(res.searchSources, [
+    { title: 'Gym Directory', uri: 'https://competitor.example/directory' },
+  ]);
   assert.deepEqual(res.sources, [
     { title: 'Consultation', uri: 'https://bestdayfitness.com/consultation' },
-    { title: 'Client Reviews', uri: 'https://bestdayfitnessreviews.com' },
   ]);
 
   assert.equal(fetchCalls[0][0], 'openai');
@@ -502,5 +509,104 @@ test('citation URL matching uses validated hostnames rather than brand substring
   const res2 = await service2.runVisibility(['openai']);
   assert.equal(res2.snapshot.answers[0].cited, true, 'validated hostname matches citation');
   assert.equal(res2.snapshot.answers[0].citedSources[0].uri, 'https://bestdayfitness.com/about');
+});
+
+test('OpenAI responses rejects empty answers appropriately', async () => {
+  const { service } = serviceFixture({
+    env: { OPENAI_API_KEY: 'openai-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          output_text: '   ',
+          output: [],
+        }),
+      }),
+    },
+  });
+
+  const res = await service.askEngine('openai', 'query');
+  assert.equal(res.ok, false);
+  assert.match(res.error, /Empty or invalid answer/i);
+});
+
+test('classifier validation rejects arbitrary JSON objects lacking boolean mentioned or valid sentiment', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({ output_text: 'Best Day Fitness is in St. Petersburg.', output: [] }),
+      }),
+    },
+    // Classifier returns arbitrary JSON lacking mentioned or valid sentiment
+    geminiGenerate: async () => ({
+      text: JSON.stringify({ randomField: 123, status: 'ok' }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.brandMentions, 1);
+  assert.equal(snapshot.brandRecommendations, 0);
+  assert.equal(snapshot.recommendationClassifiedCount, 0);
+  assert.equal(snapshot.visibilityScore, null, 'malformed classifier object excluded from denominator');
+  assert.equal(snapshot.answers[0].recommended, null);
+  assert.equal(snapshot.answers[0].classificationStatus, 'unavailable');
+});
+
+test('uncited search action sources do NOT falsely trigger brand citation metric', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          id: 'resp_456',
+          output: [
+            {
+              type: 'web_search_call',
+              status: 'completed',
+              action: {
+                sources: [
+                  // Search inspected bestdayfitness.com during browsing
+                  { url: 'https://bestdayfitness.com/programs', title: 'Programs' },
+                ],
+              },
+            },
+            {
+              type: 'message',
+              content: [
+                {
+                  type: 'output_text',
+                  // But the actual generated answer only cites a competitor directory
+                  text: 'Check out local fitness studios in the Tampa Bay area.',
+                  annotations: [
+                    { type: 'url_citation', url: 'https://tampabaygyms.example/list', title: 'Tampa Gyms' },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: false,
+        recommended: false,
+        sentiment: 'absent',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  // Only actual answer citations count toward cited!
+  assert.equal(snapshot.answers[0].cited, false, 'search action source does not count as answer citation');
+  assert.equal(snapshot.brandCitations, 0);
 });
 
