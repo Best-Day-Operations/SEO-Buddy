@@ -1,0 +1,207 @@
+{
+  "url": "https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU?t=1790706307044",
+  "timestamp": "2026-09-30T14:12:57.528906+00:00",
+  "score": 0,
+  "band": "critical",
+  "error": "Response too large: 20398368 bytes (max: 10485760)",
+  "checks": {
+    "robots_txt": {
+      "score": 0,
+      "max": 18,
+      "passed": false,
+      "details": {
+        "found": false,
+        "bots_allowed": [],
+        "bots_missing": [],
+        "bots_blocked": [],
+        "bots_partial": [],
+        "citation_bots_ok": false,
+        "crawl_delay": null,
+        "citation_bots_explicit": false
+      }
+    },
+    "llms_txt": {
+      "score": 0,
+      "max": 18,
+      "passed": false,
+      "details": {
+        "found": false,
+        "has_h1": false,
+        "has_description": false,
+        "has_sections": false,
+        "has_links": false,
+        "word_count": 0,
+        "has_full": false,
+        "sections_count": 0,
+        "links_count": 0,
+        "has_blockquote": false,
+        "has_optional_section": false,
+        "companion_files_hint": false,
+        "validation_warnings": [],
+        "blocked_by_cdn": false
+      }
+    },
+    "schema_jsonld": {
+      "score": 0,
+      "max": 16,
+      "passed": false,
+      "details": {
+        "has_website": false,
+        "has_webapp": false,
+        "has_faq": false,
+        "found_types": []
+      }
+    },
+    "meta_tags": {
+      "score": 0,
+      "max": 14,
+      "passed": false,
+      "details": {
+        "has_title": false,
+        "has_description": false,
+        "has_canonical": false,
+        "has_og_title": false,
+        "has_og_description": false,
+        "has_og_image": false,
+        "title_text": "",
+        "description_text": "",
+        "description_length": 0,
+        "title_length": 0,
+        "canonical_url": "",
+        "x_robots_noindex": false,
+        "x_robots_tag": "",
+        "has_noai": false,
+        "noai_value": ""
+      }
+    },
+    "content": {
+      "score": 0,
+      "max": 12,
+      "passed": false,
+      "details": {
+        "has_h1": false,
+        "heading_count": 0,
+        "has_numbers": false,
+        "has_links": false,
+        "word_count": 0,
+        "h1_text": "",
+        "numbers_count": 0,
+        "external_links_count": 0,
+        "has_heading_hierarchy": false,
+        "has_lists_or_tables": false,
+        "has_front_loading": false
+      }
+    },
+    "signals": {
+      "score": 0,
+      "max": 6,
+      "passed": false,
+      "details": {
+        "has_lang": false,
+        "lang_value": "",
+        "has_rss": false,
+        "rss_url": "",
+        "has_freshness": false,
+        "freshness_date": ""
+      }
+    },
+    "ai_discovery": {
+      "score": 0,
+      "max": 6,
+      "passed": false,
+      "details": {
+        "has_well_known_ai": false,
+        "has_summary": false,
+        "has_faq": false,
+        "has_service": false,
+        "summary_valid": false,
+        "faq_count": 0,
+        "endpoints_found": 0,
+        "has_webmcp_declaration": false,
+        "webmcp_declared_tool_count": 0
+      }
+    },
+    "brand_entity": {
+      "score": 0,
+      "max": 10,
+      "passed": false,
+      "details": {
+        "brand_name_consistent": false,
+        "names_found": [],
+        "primary_name": null,
+        "schema_desc_matches_meta": false,
+        "kg_pillar_count": 0,
+        "kg_pillar_urls": [],
+        "has_wikipedia": false,
+        "has_wikidata": false,
+        "has_linkedin": false,
+        "has_crunchbase": false,
+        "has_about_link": false,
+        "has_contact_info": false,
+        "has_geo_schema": false,
+        "has_hreflang": false,
+        "hreflang_count": 0,
+        "faq_depth": 0,
+        "has_recent_articles": false
+      }
+    }
+  },
+  "score_breakdown": {},
+  "recommendations": [
+    "Unable to reach https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU?t=1790706307044: Response too large: 20398368 bytes (max: 10485760)"
+  ],
+  "trust_stack": {
+    "checked": false,
+    "technical": {
+      "name": "technical",
+      "label": "Technical Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [],
+      "details": {}
+    },
+    "identity": {
+      "name": "identity",
+      "label": "Identity Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [],
+      "details": {}
+    },
+    "social": {
+      "name": "social",
+      "label": "Social Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [],
+      "details": {}
+    },
+    "academic": {
+      "name": "academic",
+      "label": "Academic Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [],
+      "details": {}
+    },
+    "consistency": {
+      "name": "consistency",
+      "label": "Consistency Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [],
+      "details": {}
+    },
+    "composite_score": 0,
+    "grade": "F",
+    "trust_level": "low"
+  },
+  "http_status": 0,
+  "page_size": 0,
+  "audit_duration_ms": 4544
+}

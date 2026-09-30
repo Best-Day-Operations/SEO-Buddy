@@ -1,0 +1,561 @@
+{
+  "url": "https://bestdayfitness.com",
+  "timestamp": "2026-09-30T14:12:47.607042+00:00",
+  "score": 32,
+  "band": "critical",
+  "error": null,
+  "checks": {
+    "robots_txt": {
+      "score": 5,
+      "max": 18,
+      "passed": false,
+      "details": {
+        "found": true,
+        "bots_allowed": [],
+        "bots_missing": [
+          "GPTBot",
+          "OAI-SearchBot",
+          "ChatGPT-User",
+          "ClaudeBot",
+          "Claude-SearchBot",
+          "Claude-User",
+          "PerplexityBot",
+          "Perplexity-User",
+          "Googlebot",
+          "Google-Extended",
+          "Google-CloudVertexBot",
+          "Bingbot",
+          "Applebot-Extended",
+          "cohere-ai",
+          "DuckAssistBot",
+          "Bytespider",
+          "meta-externalagent",
+          "Meta-ExternalFetcher",
+          "facebookexternalhit",
+          "Amazonbot",
+          "AI2Bot",
+          "AI2Bot-Dolma",
+          "xAI-Bot",
+          "Applebot",
+          "PetalBot",
+          "YouBot",
+          "CCBot"
+        ],
+        "bots_blocked": [],
+        "bots_partial": [],
+        "citation_bots_ok": false,
+        "crawl_delay": null,
+        "citation_bots_explicit": false
+      }
+    },
+    "llms_txt": {
+      "score": 7,
+      "max": 18,
+      "passed": false,
+      "details": {
+        "found": true,
+        "has_h1": false,
+        "has_description": false,
+        "has_sections": false,
+        "has_links": false,
+        "word_count": 0,
+        "has_full": true,
+        "sections_count": 0,
+        "links_count": 0,
+        "has_blockquote": false,
+        "has_optional_section": false,
+        "companion_files_hint": false,
+        "validation_warnings": [
+          "llms.txt should have a > blockquote description after H1",
+          "llms.txt should contain markdown links to site pages",
+          "llms.txt is too short, consider adding more content"
+        ],
+        "blocked_by_cdn": false
+      }
+    },
+    "schema_jsonld": {
+      "score": 0,
+      "max": 16,
+      "passed": false,
+      "details": {
+        "has_website": false,
+        "has_webapp": false,
+        "has_faq": false,
+        "found_types": []
+      }
+    },
+    "meta_tags": {
+      "score": 5,
+      "max": 14,
+      "passed": false,
+      "details": {
+        "has_title": true,
+        "has_description": false,
+        "has_canonical": false,
+        "has_og_title": true,
+        "has_og_description": false,
+        "has_og_image": true,
+        "title_text": "Best Day Fitness",
+        "description_text": "",
+        "description_length": 0,
+        "title_length": 16,
+        "canonical_url": "",
+        "x_robots_noindex": false,
+        "x_robots_tag": "",
+        "has_noai": false,
+        "noai_value": ""
+      }
+    },
+    "content": {
+      "score": 10,
+      "max": 12,
+      "passed": true,
+      "details": {
+        "has_h1": true,
+        "heading_count": 27,
+        "has_numbers": true,
+        "has_links": true,
+        "word_count": 748,
+        "h1_text": "Move Better.",
+        "numbers_count": 15,
+        "external_links_count": 4,
+        "has_heading_hierarchy": false,
+        "has_lists_or_tables": true,
+        "has_front_loading": true
+      }
+    },
+    "signals": {
+      "score": 3,
+      "max": 6,
+      "passed": true,
+      "details": {
+        "has_lang": true,
+        "lang_value": "en",
+        "has_rss": false,
+        "rss_url": "",
+        "has_freshness": false,
+        "freshness_date": ""
+      }
+    },
+    "ai_discovery": {
+      "score": 2,
+      "max": 6,
+      "passed": true,
+      "details": {
+        "has_well_known_ai": true,
+        "has_summary": false,
+        "has_faq": false,
+        "has_service": false,
+        "summary_valid": false,
+        "faq_count": 0,
+        "endpoints_found": 1,
+        "has_webmcp_declaration": false,
+        "webmcp_declared_tool_count": 0
+      }
+    },
+    "brand_entity": {
+      "score": 3,
+      "max": 10,
+      "passed": true,
+      "details": {
+        "brand_name_consistent": true,
+        "names_found": [
+          "Move Better.",
+          "Best Day Fitness",
+          "Best Day Fitness"
+        ],
+        "primary_name": "Best Day Fitness",
+        "schema_desc_matches_meta": false,
+        "kg_pillar_count": 0,
+        "kg_pillar_urls": [],
+        "has_wikipedia": false,
+        "has_wikidata": false,
+        "has_linkedin": false,
+        "has_crunchbase": false,
+        "has_about_link": true,
+        "has_contact_info": false,
+        "has_geo_schema": false,
+        "has_hreflang": false,
+        "hreflang_count": 0,
+        "faq_depth": 0,
+        "has_recent_articles": false
+      }
+    }
+  },
+  "score_breakdown": {
+    "robots": 5,
+    "llms": 7,
+    "schema": 0,
+    "meta": 5,
+    "content": 10,
+    "signals": 3,
+    "ai_discovery": 2,
+    "brand_entity": 3,
+    "negative_penalty": -3
+  },
+  "recommendations": [
+    "Hidden text detected (display:none/visibility:hidden with content) \u2014 AI crawlers can read it and may penalize this cloaking pattern",
+    "Update robots.txt to include all AI bots (GPTBot, ClaudeBot, PerplexityBot)",
+    "Add WebSite JSON-LD schema to homepage",
+    "Add Organization JSON-LD schema with name, url, and logo",
+    "Add FAQPage schema with site FAQs",
+    "Add H2 sections to llms.txt to organize content by topic (e.g. ## Features, ## Documentation, ## API)",
+    "llms.txt has only 0 links. Add more markdown links to key pages for better AI indexing coverage.",
+    "llms.txt should have a > blockquote description after H1",
+    "llms.txt should contain markdown links to site pages",
+    "llms.txt is too short, consider adding more content",
+    "Add <link rel=\"canonical\"> to prevent duplicate content issues in AI indexing",
+    "Add Open Graph tags (og:title, og:description, og:image) for AI and social previews",
+    "Add optimized meta description (150-160 characters)",
+    "Add sameAs links in Organization schema to Wikipedia, Wikidata, LinkedIn, or Crunchbase for Knowledge Graph disambiguation",
+    "Add address, telephone or contactPoint to Organization schema for entity validation",
+    "Keyword stuffing detected: 'your' at 2.9% density \u2014 diversify vocabulary",
+    "Add H2/H3 subheadings to structure content for AI extraction",
+    "Create /ai/summary.json with site name and description for AI engines",
+    "Create /ai/faq.json with structured FAQ for AI search visibility",
+    "Create /ai/service.json to describe service capabilities for AI",
+    "Add RSS/Atom feed and link it in <head> with <link rel=\"alternate\" type=\"application/rss+xml\"> for AI discovery",
+    "Add potentialAction (SearchAction) to WebSite schema for AI agent discoverability",
+    "Add descriptive labels to forms (label, aria-label) to make them usable by AI agents",
+    "Consider adding WebMCP toolname/tooldescription attributes to interactive elements for Chrome AI agent support",
+    "15 of 19 images lack descriptive alt text \u2014 multimodal AI engines (Gemini, GPT-4o) read images through their alt text"
+  ],
+  "webmcp": {
+    "readiness_level": "none",
+    "agent_ready": false,
+    "has_register_tool": false,
+    "has_tool_attributes": false,
+    "tool_count": 0,
+    "has_potential_action": false,
+    "potential_actions": [],
+    "has_labeled_forms": false,
+    "labeled_forms_count": 0,
+    "has_openapi": false,
+    "has_webmcp_declaration": false,
+    "declared_tool_count": 0
+  },
+  "negative_signals": {
+    "severity": "medium",
+    "signals_found": 3,
+    "cta_density_high": false,
+    "cta_count": 0,
+    "has_popup_signals": true,
+    "is_thin_content": false,
+    "broken_links_count": 0,
+    "has_keyword_stuffing": true,
+    "has_author_signal": false,
+    "boilerplate_ratio": 0.0,
+    "has_mixed_signals": false
+  },
+  "cdn_check": {
+    "checked": true,
+    "browser_status": 200,
+    "browser_content_length": 762197,
+    "bot_results": [
+      {
+        "bot": "GPTBot",
+        "status": 200,
+        "content_length": 762197,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "OAI-SearchBot",
+        "status": 200,
+        "content_length": 762197,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "PerplexityBot",
+        "status": 200,
+        "content_length": 762197,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Claude-SearchBot",
+        "status": 200,
+        "content_length": 762197,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Googlebot",
+        "status": 200,
+        "content_length": 762197,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Applebot",
+        "status": 200,
+        "content_length": 762197,
+        "blocked": false,
+        "challenge_detected": false
+      }
+    ],
+    "any_blocked": false,
+    "cdn_detected": "cloudflare",
+    "cdn_headers": {
+      "cf-ray": "a433d2ff4bee71fc-ATL",
+      "cf-cache-status": "HIT",
+      "server": "cloudflare"
+    },
+    "error": ""
+  },
+  "js_rendering": {
+    "checked": true,
+    "raw_word_count": 745,
+    "raw_heading_count": 27,
+    "has_empty_root": false,
+    "has_noscript_content": false,
+    "framework_detected": "",
+    "js_dependent": false,
+    "details": "745 words and 27 headings found in raw HTML. Content is accessible without JavaScript."
+  },
+  "multimodal": {
+    "checked": true,
+    "total_images": 19,
+    "images_with_alt": 4,
+    "alt_coverage": 0.21,
+    "caption_count": 0,
+    "has_video": false,
+    "video_count": 0,
+    "has_video_schema": false,
+    "has_video_captions": false,
+    "has_audio": false,
+    "has_audio_schema": false,
+    "has_transcript": false,
+    "readiness_level": "missing"
+  },
+  "trust_stack": {
+    "checked": true,
+    "technical": {
+      "name": "technical",
+      "label": "Technical Trust",
+      "score": 2,
+      "max_score": 5,
+      "signals_found": [
+        "HTTPS"
+      ],
+      "signals_missing": [
+        "Strict-Transport-Security header missing",
+        "Content-Security-Policy header missing",
+        "X-Frame-Options header missing"
+      ],
+      "details": {}
+    },
+    "identity": {
+      "name": "identity",
+      "label": "Identity Trust",
+      "score": 2,
+      "max_score": 5,
+      "signals_found": [
+        "Brand name consistent",
+        "About page"
+      ],
+      "signals_missing": [
+        "No contact information in schema",
+        "No Organization JSON-LD schema",
+        "No author attribution found"
+      ],
+      "details": {}
+    },
+    "social": {
+      "name": "social",
+      "label": "Social Trust",
+      "score": 2,
+      "max_score": 5,
+      "signals_found": [
+        "Reviews/testimonials",
+        "Social profiles (facebook.com, instagram.com, youtube.com)"
+      ],
+      "signals_missing": [
+        "No sameAs links in schema",
+        "No Knowledge Graph pillar links"
+      ],
+      "details": {}
+    },
+    "academic": {
+      "name": "academic",
+      "label": "Academic Trust",
+      "score": 1,
+      "max_score": 5,
+      "signals_found": [
+        "Numbers cited (15)"
+      ],
+      "signals_missing": [
+        "Few external source links",
+        "No links to authoritative sources (DOI, PubMed, Scholar)",
+        "No References/Sources section",
+        "No original research data patterns"
+      ],
+      "details": {
+        "authoritative_domains": [],
+        "statistics_count": 0,
+        "numbers_count": 15
+      }
+    },
+    "consistency": {
+      "name": "consistency",
+      "label": "Consistency Trust",
+      "score": 3,
+      "max_score": 5,
+      "signals_found": [
+        "Brand name consistent across title/H1/schema",
+        "No mixed signals"
+      ],
+      "signals_missing": [
+        "Schema description differs from meta description",
+        "No dateModified in schema"
+      ],
+      "details": {}
+    },
+    "composite_score": 10,
+    "grade": "D",
+    "trust_level": "low"
+  },
+  "prompt_injection": {
+    "checked": true,
+    "hidden_text_found": true,
+    "hidden_text_count": 6,
+    "hidden_text_samples": [
+      "Enable sound",
+      "Enable sound",
+      "Enable sound"
+    ],
+    "invisible_unicode_found": false,
+    "invisible_unicode_count": 0,
+    "llm_instruction_found": false,
+    "llm_instruction_count": 0,
+    "llm_instruction_samples": [],
+    "html_comment_injection_found": false,
+    "html_comment_injection_count": 0,
+    "html_comment_samples": [],
+    "monochrome_text_found": false,
+    "monochrome_text_count": 0,
+    "microfont_found": false,
+    "microfont_count": 0,
+    "data_attr_injection_found": false,
+    "data_attr_injection_count": 0,
+    "data_attr_samples": [],
+    "aria_hidden_injection_found": false,
+    "aria_hidden_injection_count": 0,
+    "aria_hidden_samples": [],
+    "ugc_surface_found": false,
+    "ugc_surface_samples": [],
+    "ugc_injection_risk": false,
+    "patterns_found": 1,
+    "severity": "suspicious",
+    "risk_level": "medium"
+  },
+  "rag_chunk": {
+    "checked": true,
+    "total_sections": 1,
+    "sections_in_range": 0,
+    "avg_section_words": 2.0,
+    "has_definition_opening": false,
+    "heading_as_boundary_ratio": 27.0,
+    "anchor_sentences": 22,
+    "chunk_readiness_score": 25
+  },
+  "embedding_proximity": {
+    "checked": true,
+    "skipped_reason": "sentence-transformers not installed (pip install geo-optimizer-skill[embedding])",
+    "model_name": "",
+    "query_scores": [],
+    "avg_similarity": 0.0,
+    "top_similarity": 0.0,
+    "retrievable_chunks": 0,
+    "total_chunks": 0
+  },
+  "content_decay": {
+    "checked": true,
+    "signals": [],
+    "earliest_decay_days": null,
+    "decay_risk": "low",
+    "evergreen_score": 100
+  },
+  "platform_citation": {
+    "checked": true,
+    "platforms": [
+      {
+        "platform": "chatgpt",
+        "score": 25,
+        "strengths": [
+          "llms.txt present",
+          "Well-structured content"
+        ],
+        "recommendations": [
+          "Allow GPTBot in robots.txt",
+          "Add FAQPage schema for Q&A-style answers",
+          "Add Organization schema for entity clarity"
+        ]
+      },
+      {
+        "platform": "perplexity",
+        "score": 28,
+        "strengths": [
+          "Substantial content depth",
+          "External links for source diversity"
+        ],
+        "recommendations": [
+          "Allow PerplexityBot in robots.txt",
+          "Add links in llms.txt for source diversity",
+          "Add dateModified schema or freshness indicators"
+        ]
+      },
+      {
+        "platform": "google_ai",
+        "score": 13,
+        "strengths": [
+          "Quality content structure",
+          "Content available without JS (SSR-safe)"
+        ],
+        "recommendations": [
+          "Allow Google-Extended in robots.txt",
+          "Add JSON-LD schema markup",
+          "Complete title, description, and canonical meta tags",
+          "Add dateModified / lastmod freshness signals",
+          "Add descriptive alt text to images",
+          "Add sameAs links to social profiles and Wikipedia"
+        ]
+      }
+    ]
+  },
+  "context_window": {
+    "checked": true,
+    "total_words": 745,
+    "total_tokens_estimate": 968,
+    "front_loaded_ratio": 0.36,
+    "key_info_tokens": 273,
+    "filler_ratio": 0.0,
+    "optimal_for": [
+      "perplexity",
+      "chatgpt",
+      "claude"
+    ],
+    "truncation_risk": "low",
+    "context_efficiency_score": 72
+  },
+  "instruction_readiness": {
+    "checked": true,
+    "labeled_buttons": 16,
+    "unlabeled_buttons": 0,
+    "action_clarity_score": 100,
+    "total_inputs": 0,
+    "labeled_inputs": 0,
+    "typed_inputs": 0,
+    "form_readability_score": 100,
+    "nav_links": 44,
+    "stateful_urls": true,
+    "has_aria_live": false,
+    "has_error_roles": false,
+    "readiness_score": 75,
+    "readiness_level": "ready"
+  },
+  "http_status": 200,
+  "page_size": 762197,
+  "audit_duration_ms": 7596
+}

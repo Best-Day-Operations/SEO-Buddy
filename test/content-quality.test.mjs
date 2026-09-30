@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {
   assessArticleQuality,
   assessPageQuality,
+  extractRenderedContent,
+  inspectClaimContext,
   textOnly,
   PROHIBITED_CLAIMS_PATTERNS,
-  APPROVED_FACTS_PATTERNS,
 } from '../lib/content-quality.js';
 import { APPROVED_SERVICE_PROMPTS } from '../lib/ai-visibility-service.js';
 import { evaluateWebsiteAudit } from '../lib/website-audit-service.js';
@@ -54,6 +55,128 @@ test('assessPageQuality validates approved consultation page structure, facts, a
   assert.ok(quality.verifiedFacts.length >= 4);
 });
 
+test('page with business facts only inside application/json or application/ld+json script must NOT mark facts as verified in visible content', () => {
+  const jsonOnlyHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "HealthClub",
+          "address": "6619 1st Ave S",
+          "telephone": "+1-727-334-1472",
+          "openingHours": "Mo-Sa 04:00-22:00, Su 09:00-17:00",
+          "description": "By appointment only barefoot studio in St. Petersburg, FL"
+        }
+        </script>
+      </head>
+      <body>
+        <h1>Welcome to our studio</h1>
+        <p>We are a private wellness space. Learn more about what we do below.</p>
+        <h2>Our story</h2>
+        <p>Dedicated to helping clients move and recover better every single day in Florida.</p>
+      </body>
+    </html>
+  `;
+  const result = assessPageQuality(jsonOnlyHtml, { pageType: 'home' });
+  // None of the facts hidden inside the json script should be marked as verified in visible page copy!
+  assert.equal(result.verifiedFacts.includes('6619 1st Ave S address'), false);
+  assert.equal(result.verifiedFacts.includes('(727) 334-1472 phone number'), false);
+  assert.equal(result.verifiedFacts.includes('Appointment-only studio'), false);
+  assert.equal(result.verifiedFacts.includes('Barefoot training environment'), false);
+  assert.ok(result.missingFacts.length > 0);
+});
+
+test('page stating "By appointment only in St. Petersburg. HaloRed sessions $39.99. Member plan $299. Public plan $999." must NOT verify public pricing and MUST flag $999 as prohibited claim', () => {
+  const badHaloHtml = `
+    <div>
+      <h1>HaloRed Recovery Lounge</h1>
+      <p>By appointment only in St. Petersburg. HaloRed sessions $39.99. Member plan $299. Public plan $999.</p>
+      <h2>How does HaloRed work?</h2>
+      <p>Combines full-body photobiomodulation with dry salt halotherapy for cellular recovery.</p>
+      <ul><li>Red light</li><li>Salt aerosol</li></ul>
+      <a href="/book">Book session</a>
+    </div>
+  `;
+  const result = assessPageQuality(badHaloHtml, { pageType: 'halored' });
+  assert.equal(result.publishable, false);
+  assert.ok(result.claimsViolations.some(v => v.includes('$999')), `Expected $999 violation, got: ${result.claimsViolations.join(', ')}`);
+  assert.equal(result.verifiedFacts.includes('Public guest recovery plan ($399/mo)'), false);
+  assert.ok(result.blockingIssues.some(i => i.includes('$999') || i.includes('prohibited factual claims')));
+});
+
+test('page stating "We do not promise guaranteed weight loss" must NOT be flagged as a prohibited guarantee', () => {
+  const disclaimerHtml = `
+    <div>
+      <h1>Sustainable Strength for Older Adults</h1>
+      <p>Best Day Fitness & Wellness in St. Petersburg, FL is a private barefoot studio open by appointment only. We focus on mobility, balance, and joint longevity. We do not promise guaranteed weight loss or extreme crash diets. Our approach centers on sustainable functional movement, joint preservation, and long-term vitality for older adults who want to maintain their independence and stay active for life.</p>
+      <h2>What can you expect from our program?</h2>
+      <p>Individualized strength, stability, and personalized progression designed for adults 50+. Every session is customized to your biomechanics and movement history so that you train safely without joint irritation.</p>
+      <h2>How do we work together?</h2>
+      <p>We work one-on-one in a calm, private environment where your goals, safety, and comfort always come first.</p>
+      <ul><li>Mobility</li><li>Stability</li><li>Balance</li></ul>
+      <a href="/consultation">Schedule assessment</a>
+    </div>
+  `;
+  const result = assessPageQuality(disclaimerHtml, { pageType: 'home' });
+  // Must NOT declare a prohibited claims violation for guaranteed weight loss when explicitly negated!
+  assert.equal(result.claimsViolations.some(v => v.includes('guaranteed weight loss')), false);
+  assert.equal(result.publishable, true);
+  // May note it in flaggedForReview with reason
+  assert.ok(result.flaggedForReview.some(f => f.claim === 'guaranteed weight loss'));
+});
+
+test('associating prices with service and audience: $99 introductory consultation does not verify $200 normal value without explicit mention', () => {
+  const consultationOnly99 = `
+    <div>
+      <h1>Fitness Consultation</h1>
+      <p>Best Day Fitness in St. Petersburg, FL offers an introductory 45-minute fitness consultation for $99 conducted by the Client Experience Team by appointment only.</p>
+      <h2>What is covered?</h2>
+      <p>Comprehensive assessment of mobility and movement.</p>
+      <ul><li>3D body scan</li></ul>
+      <a href="/book">Book now</a>
+    </div>
+  `;
+  const result = assessPageQuality(consultationOnly99, { pageType: 'consultation' });
+  assert.ok(result.verifiedFacts.includes('$99 initial consultation'));
+  // $200 normal value is NOT verified because it was not explicitly claimed
+  assert.equal(result.verifiedFacts.includes('$200 standard consultation value'), false);
+
+  // But if an incorrect regular price is claimed, e.g. "normally $500", it must be flagged
+  const badValueHtml = `
+    <div>
+      <h1>Fitness Consultation</h1>
+      <p>Best Day Fitness in St. Petersburg, FL offers a 45-minute fitness consultation for $99 (normally $500) conducted by the Client Experience Team by appointment only.</p>
+      <h2>What is covered?</h2>
+      <p>Assessment.</p>
+      <ul><li>Scan</li></ul>
+      <a href="/book">Book</a>
+    </div>
+  `;
+  const badResult = assessPageQuality(badValueHtml, { pageType: 'consultation' });
+  assert.ok(badResult.claimsViolations.some(v => v.includes('$500') && v.includes('$200 approved')));
+});
+
+test('editorial heuristics are explicitly labeled as heuristics and distinguished from factual compliance', () => {
+  const sampleHtml = `
+    <div>
+      <h1>Title</h1>
+      <p>${'word '.repeat(35)}</p>
+      <h2>Question one?</h2>
+      <h2>Question two?</h2>
+      <a href="#">Link</a>
+    </div>
+  `;
+  const result = assessPageQuality(sampleHtml);
+  const heuristicChecks = result.checks.filter(c => c.category === 'editorial_heuristic');
+  const factualChecks = result.checks.filter(c => c.category === 'factual_compliance');
+
+  assert.ok(heuristicChecks.length >= 3, 'Must have editorial heuristic checks');
+  assert.ok(factualChecks.length >= 2, 'Must have factual compliance checks');
+  assert.ok(result.heuristicDisclaimer.includes('Editorial heuristic scores measure structural scannability'));
+});
+
 test('assessPageQuality blocks pages containing prohibited claims or obsolete schedules', () => {
   // Obsolete schedule and prohibited medical claim
   const badHtml = `
@@ -73,24 +196,7 @@ test('assessPageQuality blocks pages containing prohibited claims or obsolete sc
   assert.ok(quality.claimsViolations.includes('semi-private training (only 1-on-1 private training is offered)'));
   assert.ok(quality.claimsViolations.includes('obsolete studio schedule (6 AM–7 PM)'));
   assert.ok(quality.claimsViolations.includes('obsolete team naming (Membership Experience Team instead of Client Experience Team)'));
-  assert.ok(quality.claimsViolations.includes('incorrect consultation duration (90 min instead of 45 min)'));
-});
-
-test('assessPageQuality blocks halored pages with $999 price', () => {
-  const badHaloHtml = `
-    <div>
-      <h1>HaloRed Recovery</h1>
-      <p>HaloRed dry salt and red light therapy booth in St. Petersburg, FL by appointment only. $39.99 for single session.</p>
-      <p>Our monthly public halored plan is $999 for recovery access.</p>
-      <h2>How it works</h2>
-      <ul><li>Red light</li><li>Dry salt</li></ul>
-      <a href="/recovery">Book recovery</a>
-    </div>
-  `;
-
-  const quality = assessPageQuality(badHaloHtml, { pageType: 'halored' });
-  assert.equal(quality.publishable, false);
-  assert.ok(quality.claimsViolations.includes('incorrect HaloRed price ($999 instead of $399)'));
+  assert.ok(quality.claimsViolations.includes('incorrect consultation duration (45 minutes approved)'));
 });
 
 test('APPROVED_SERVICE_PROMPTS exposes non-empty query arrays for all approved studio services', () => {

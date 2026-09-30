@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 const {
   APPROVED_FACTS,
@@ -209,7 +212,7 @@ test('exitCode: 0 is preserved without truthiness falsy default replacement', ()
 
 test('real tool run demonstration: preview size-limit failure is valid evidence of unavailable measurement', () => {
   // Load real failure artifact from disk
-  const artifactPath = path.resolve('C:/Users/chris/.gemini/antigravity/brain/902d0ef8-80e1-4892-97e0-44fe87437e0d/geo-audits/baseline-staging-preview.json');
+  const artifactPath = path.resolve(__dirname, 'fixtures/geo-audits/baseline-staging-preview.json');
   assert.ok(fs.existsSync(artifactPath), 'Artifact must exist on disk');
   const previewArtifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
 
@@ -223,7 +226,7 @@ test('real tool run demonstration: preview size-limit failure is valid evidence 
 });
 
 test('real tool run demonstration: production baseline import preserves findings and score 32', () => {
-  const artifactPath = path.resolve('C:/Users/chris/.gemini/antigravity/brain/902d0ef8-80e1-4892-97e0-44fe87437e0d/geo-audits/baseline-production-bestdayfitness.json');
+  const artifactPath = path.resolve(__dirname, 'fixtures/geo-audits/baseline-production-bestdayfitness.json');
   assert.ok(fs.existsSync(artifactPath), 'Artifact must exist on disk');
   const prodArtifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
 

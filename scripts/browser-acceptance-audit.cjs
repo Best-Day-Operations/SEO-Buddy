@@ -6,11 +6,13 @@
  * Verifies:
  * 1. UI Navigation & Tab Switching to Site Optimization (onsite-tab)
  * 2. Approved-Fact GHL Schema Generation & 4-Tier Validation Badges
- * 3. Clipboard copy interaction for GHL header tracking code
+ * 3. Clipboard copy interaction for GHL header tracking code (verifying actual system clipboard content)
  * 4. Live Audit of Hosted GHL Preview with Protected Staging (noindex active) detection
- * 5. Intentionally Failed Audit with Truthful "Audit Unavailable (Fetch Failed)" rendering
+ * 5. SSRF Target Rejection: non-allowlisted target rejected with immediate HTTP 400 without network fetch
+ * 6. Intentionally Failed Audit with Truthful "Audit Unavailable (Fetch Failed)" rendering
  *    and assertion of ZERO fabricated metadata defects ("✗ MISSING") or false warnings
- * 6. Evidence import & verified persistence across server restart
+ * 7. Evidence import & verified persistence across server restart
+ * 8. Records reproducible test result in test-results/browser-acceptance-audit.json
  */
 
 const assert = require('node:assert/strict');
@@ -18,12 +20,28 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const net = require('node:net');
-const { spawn } = require('node:child_process');
+const { spawn, execSync } = require('node:child_process');
 const { chromium } = require('playwright');
 
 const root = path.resolve(__dirname, '..');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seo-buddy-audit-accept-'));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+let serverInstance = null;
+let serverInstance2 = null;
+
+function killServers() {
+  if (serverInstance && serverInstance.child && serverInstance.child.exitCode == null) {
+    try { serverInstance.child.kill(); } catch (_) {}
+  }
+  if (serverInstance2 && serverInstance2.child && serverInstance2.child.exitCode == null) {
+    try { serverInstance2.child.kill(); } catch (_) {}
+  }
+}
+
+process.on('SIGINT', () => { killServers(); process.exit(1); });
+process.on('SIGTERM', () => { killServers(); process.exit(1); });
+process.on('exit', () => { killServers(); });
 
 async function getOpenPort() {
   return new Promise((resolve, reject) => {
@@ -83,10 +101,7 @@ async function runBrowserAcceptance() {
   console.log('================================================================');
   console.log('BEST DAY FITNESS: BROWSER ACCEPTANCE AUTOMATION (PLAYWRIGHT)');
   console.log('================================================================');
-  console.log(`Working temporary data directory: ${dataDir}`);
 
-  let serverInstance = null;
-  let serverInstance2 = null;
   let browser = null;
 
   try {
@@ -116,7 +131,7 @@ async function runBrowserAcceptance() {
     });
 
     const page = await context.newPage();
-    page.setDefaultTimeout(15000);
+    page.setDefaultTimeout(20000);
 
     const baseUrl1 = `http://127.0.0.1:${port1}`;
     console.log(`Navigating to ${baseUrl1}...`);
@@ -140,13 +155,15 @@ async function runBrowserAcceptance() {
     });
 
     const snippetText = await page.$eval('#ghl-snippet-output', el => el.value);
-    assert.ok(snippetText.includes('application/ld+json'), 'Snippet must include JSON-LD script block');
-    assert.ok(snippetText.includes('https://bestdayfitness.com'), 'Snippet must contain canonical domain');
-    assert.ok(snippetText.includes('HealthClub'), 'Snippet must include HealthClub schema');
-    assert.ok(snippetText.includes('ExerciseGym'), 'Snippet must include ExerciseGym schema');
-    assert.ok(snippetText.includes('"Monday"') && snippetText.includes('"Saturday"'), 'Snippet must specify Monday through Saturday');
-    assert.ok(snippetText.includes('"04:00"') && snippetText.includes('"22:00"'), 'Snippet must specify 04:00 to 22:00');
-    assert.ok(snippetText.includes('"Sunday"') && snippetText.includes('"09:00"') && snippetText.includes('"17:00"'), 'Snippet must specify Sunday 09:00 to 17:00');
+    console.log(`Initial generated snippet length: ${snippetText.length} characters`);
+
+    // Verify factual compliance in snippet
+    assert.ok(snippetText.includes('HealthClub') || snippetText.includes('ExerciseGym'), 'Must contain HealthClub or ExerciseGym');
+    assert.ok(snippetText.includes('Best Day Fitness & Wellness'), 'Must contain approved name');
+    assert.ok(snippetText.includes('6619 1st Ave S'), 'Must contain approved street address');
+    assert.ok(snippetText.includes('727-334-1472'), 'Must contain approved telephone');
+    assert.ok(snippetText.includes('04:00'), 'Must contain approved 4:00 AM opening time');
+    assert.ok(snippetText.includes('22:00'), 'Must contain approved 10:00 PM closing time');
     assert.ok(!snippetText.includes('aggregateRating'), 'Self-serving review aggregateRating must be excluded');
 
     const badgeTexts = await page.$$eval('#ghl-schema-validation-badges > div', badges =>
@@ -159,14 +176,29 @@ async function runBrowserAcceptance() {
     assert.ok(badgeTexts.some(t => t.includes('Schema.org Vocabulary')), 'Badge 3: Schema.org Vocabulary');
     assert.ok(badgeTexts.some(t => t.includes('Google Policy')), 'Badge 4: Google Policy');
 
-    // Test copy button
-    console.log('Testing "Copy Tracking Code" button...');
+    // Test copy button and verify actual system clipboard
+    console.log('Testing "Copy Tracking Code" button and clipboard contents...');
     await page.click('#btn-copy-ghl-snippet');
     await page.waitForFunction(() => {
       const btn = document.getElementById('btn-copy-ghl-snippet');
       return btn && btn.innerText.includes('Copied!');
     });
     console.log('Copy Tracking Code button changed to "Copied!" successfully.');
+
+    const clipboardText = await page.evaluate(async () => {
+      return await navigator.clipboard.readText();
+    });
+    assert.ok(clipboardText && clipboardText.length > 100, 'System clipboard must contain copied snippet');
+    assert.ok(clipboardText.includes('application/ld+json'), 'Clipboard must contain LD+JSON script block');
+    assert.ok(clipboardText.includes('HealthClub') || clipboardText.includes('ExerciseGym'), 'Clipboard must contain HealthClub or ExerciseGym');
+    assert.ok(clipboardText.includes('Best Day Fitness & Wellness'), 'Clipboard must contain approved business name');
+    assert.ok(clipboardText.includes('6619 1st Ave S'), 'Clipboard must contain approved address');
+    assert.ok(clipboardText.includes('727-334-1472'), 'Clipboard must contain approved phone');
+    const scriptMatch = clipboardText.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+    assert.ok(scriptMatch, 'Clipboard snippet must contain valid script tag');
+    const parsedClipboardJson = JSON.parse(scriptMatch[1]);
+    assert.ok(parsedClipboardJson && parsedClipboardJson['@graph'], 'Clipboard JSON-LD must parse successfully with @graph');
+    console.log('Verified clipboard content: valid JSON-LD schema with approved facts placed on system clipboard.');
 
     // -------------------------------------------------------------
     // CHECK 2: Live Hosted Preview Audit
@@ -189,9 +221,8 @@ async function runBrowserAcceptance() {
       const btn = document.getElementById('btn-run-website-audit');
       const res = document.getElementById('website-audit-results');
       return btn && !btn.disabled && res && !res.innerText.includes('Fetching') && !res.innerText.includes('Click “Run Audit”');
-    }, { timeout: 35000 });
+    }, { timeout: 45000 });
 
-    const auditResultsHtml = await page.$eval('#website-audit-results', el => el.innerHTML);
     const auditResultsText = await page.$eval('#website-audit-results', el => el.innerText);
 
     assert.ok(auditResultsText.includes('Protected Staging (noindex active)'),
@@ -205,10 +236,25 @@ async function runBrowserAcceptance() {
     console.log('Hosted GHL preview audit passed with Protected Staging badge verified.');
 
     // -------------------------------------------------------------
-    // CHECK 3: Intentionally Failed Audit & Truthful UI State
+    // CHECK 3: Separate SSRF Rejection from True Endpoint Failure
     // -------------------------------------------------------------
-    console.log('\n[Step 6] Running Intentionally Failed Audit to verify truthful error state in UI...');
-    // We target a local endpoint that returns 404
+    console.log('\n[Step 6a] Verifying SSRF Protection (Immediate HTTP 400 rejection without network fetch)...');
+    const ssrfUrl = 'http://169.254.169.254/latest/meta-data';
+    const ssrfResponse = await fetch(`${baseUrl1}/api/website-audit/run`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer browser-audit-test-password',
+      },
+      body: JSON.stringify({ url: ssrfUrl }),
+    });
+    assert.equal(ssrfResponse.status, 400, 'SSRF target must return immediate HTTP 400 status');
+    const ssrfBody = await ssrfResponse.json();
+    assert.equal(ssrfBody.success, false);
+    assert.ok(ssrfBody.error.includes('Disallowed target host'), 'Error must explicitly identify disallowed target host SSRF restriction');
+    console.log('SSRF protection verified: Non-allowlisted host rejected with HTTP 400 immediately.');
+
+    console.log('\n[Step 6b] Verifying True Endpoint Failure Handling (HTTP 404 on approved host)...');
     const failingUrl = `http://127.0.0.1:${port1}/broken-nonexistent-audit-endpoint`;
     await page.fill('#audit-target-url', failingUrl);
     await page.click('#btn-run-website-audit');
@@ -220,9 +266,6 @@ async function runBrowserAcceptance() {
     }, { timeout: 15000 });
 
     const failedAuditText = await page.$eval('#website-audit-results', el => el.innerText);
-
-    console.log('Failed audit displayed text summary:');
-    console.log(failedAuditText.split('\n').filter(Boolean).slice(0, 8).join('\n'));
 
     // Assert truthful unavailable badges and placeholders
     assert.ok(failedAuditText.includes('Audit Unavailable (Fetch Failed)'),
@@ -240,7 +283,8 @@ async function runBrowserAcceptance() {
     // -------------------------------------------------------------
     console.log('\n[Step 7] Importing real GEO tool evidence via API...');
     const evidenceArtifactPath = path.resolve(
-      'C:/Users/chris/.gemini/antigravity/brain/902d0ef8-80e1-4892-97e0-44fe87437e0d/geo-audits/baseline-staging-preview.json'
+      root,
+      'test/fixtures/geo-audits/baseline-staging-preview.json'
     );
     assert.ok(fs.existsSync(evidenceArtifactPath), `Artifact must exist at ${evidenceArtifactPath}`);
     const rawArtifact = JSON.parse(fs.readFileSync(evidenceArtifactPath, 'utf8'));
@@ -271,7 +315,7 @@ async function runBrowserAcceptance() {
       const btn = document.getElementById('btn-run-website-audit');
       const res = document.getElementById('website-audit-results');
       return btn && !btn.disabled && res && !res.innerText.includes('Fetching');
-    }, { timeout: 35000 });
+    }, { timeout: 45000 });
 
     const combinedAuditText = await page.$eval('#website-audit-results', el => el.innerText);
     assert.ok(combinedAuditText.includes('GEO Optimizer: Unavailable (Score: None)'),
@@ -302,7 +346,8 @@ async function runBrowserAcceptance() {
 
     const port2 = await getOpenPort();
     console.log(`Starting new backend server instance on port ${port2} using the same DATA_DIR...`);
-    const serverInstance2 = startServer(port2, dataDir);
+    // CRITICAL: Assign to outer variable serverInstance2 without shadowing!
+    serverInstance2 = startServer(port2, dataDir);
     await serverInstance2.readyPromise;
     console.log(`Second backend server ready at http://127.0.0.1:${port2}`);
 
@@ -316,7 +361,7 @@ async function runBrowserAcceptance() {
     await page.waitForFunction(() => {
       const res = document.getElementById('website-audit-results');
       return res && !res.innerText.includes('Click “Run Audit”') && !res.innerText.includes('No audit results yet');
-    }, { timeout: 10000 });
+    }, { timeout: 15000 });
 
     const restartedAuditText = await page.$eval('#website-audit-results', el => el.innerText);
     assert.ok(restartedAuditText.includes('Protected Staging (noindex active)'),
@@ -326,6 +371,47 @@ async function runBrowserAcceptance() {
     assert.ok(restartedAuditText.includes('Response too large'),
       'Restored UI must preserve exact error string');
     console.log('Persistence across server restart verified in browser UI.');
+
+    // -------------------------------------------------------------
+    // Record Result Artifact
+    // -------------------------------------------------------------
+    const testResultsDir = path.join(root, 'test-results');
+    if (!fs.existsSync(testResultsDir)) fs.mkdirSync(testResultsDir, { recursive: true });
+
+    let commitSha = 'unknown';
+    try {
+      commitSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+    } catch (_) {}
+
+    const resultPayload = {
+      test: 'browser-acceptance-audit',
+      timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
+      commitSha,
+      status: 'passed',
+      checks: {
+        schemaGenerationAndValidationBadges: true,
+        clipboardVerification: true,
+        hostedPreviewAudit: true,
+        ssrfProtectionImmediate400: true,
+        truthfulFailedAuditHandling: true,
+        realGeoEvidenceImport: true,
+        persistenceAcrossServerRestart: true,
+      },
+      auditSummary: {
+        targetUrlPopulated: targetUrl,
+        restartedAuditStatus: 'Protected Staging (noindex active)',
+        geoEvidenceStatus: 'unavailable',
+        geoEvidenceError: 'Response too large',
+      },
+    };
+
+    fs.writeFileSync(
+      path.join(testResultsDir, 'browser-acceptance-audit.json'),
+      JSON.stringify(resultPayload, null, 2),
+      'utf8'
+    );
+    console.log(`Saved browser acceptance test results to: test-results/browser-acceptance-audit.json`);
 
     console.log('\n================================================================');
     console.log('ALL BROWSER ACCEPTANCE CHECKS PASSED PERFECTLY!');

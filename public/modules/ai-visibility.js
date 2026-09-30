@@ -430,10 +430,16 @@
     } catch (e) { return ''; }
   }
 
-  async function loadAiVisibility() {
+  async function loadAiVisibility(category) {
     try {
-      const res = await fetch('/api/ai-visibility');
+      const filterEl = avEl('av-service-filter');
+      const cat = category !== undefined ? category : (filterEl ? filterEl.value : 'all');
+      const url = cat && cat !== 'all' ? `/api/ai-visibility?category=${encodeURIComponent(cat)}` : '/api/ai-visibility';
+      const res = await fetch(url);
       avState = await res.json();
+      if (avState && avState.promptSetVersion && avEl('av-promptset-version')) {
+        avEl('av-promptset-version').innerText = 'Prompt Set v' + avState.promptSetVersion;
+      }
       avRender();
     } catch (e) { /* leave as-is */ }
   }
@@ -454,17 +460,27 @@
   document.querySelectorAll('#aio-tab .av-mtab').forEach(btn => {
     btn.addEventListener('click', () => { avMetric = btn.dataset.metric; if (avState && avState.latest) { avRenderScore(); avRenderChart(); } });
   });
+  const avServiceFilter = avEl('av-service-filter');
+  if (avServiceFilter) {
+    avServiceFilter.addEventListener('change', () => loadAiVisibility(avServiceFilter.value));
+  }
+
   const avRunBtn = avEl('av-run');
   if (avRunBtn) avRunBtn.addEventListener('click', async () => {
     if (avState && !avState.anyConfigured) { alert('No AI engines are connected. Add GEMINI_API_KEY (and optionally OPENAI_API_KEY / PERPLEXITY_API_KEY) in Railway, then run again.'); return; }
     avRunBtn.disabled = true; avRunBtn.dataset.busy = '1'; avRunBtn.innerHTML = 'Checking engines…';
+    const selectedCat = avServiceFilter ? avServiceFilter.value : 'all';
+    const payload = {};
+    if (selectedCat && selectedCat !== 'all') {
+      payload.serviceCategories = [selectedCat];
+    }
     try {
-      const r = await authFetch('/api/ai-visibility/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const r = await authFetch('/api/ai-visibility/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const d = await r.json();
       if (!r.ok || !d.success) throw new Error(d.error || 'Run failed');
       delete avRunBtn.dataset.busy;
-      await loadAiVisibility();
-    } catch (e) { delete avRunBtn.dataset.busy; alert('AI visibility check failed: ' + e.message); await loadAiVisibility(); }
+      await loadAiVisibility(selectedCat);
+    } catch (e) { delete avRunBtn.dataset.busy; alert('AI visibility check failed: ' + e.message); await loadAiVisibility(selectedCat); }
   });
   // Auto-weekly toggle
   const avAutoBox = avEl('av-auto');
@@ -484,6 +500,25 @@
   });
   const avPromptsCancel = avEl('av-prompts-cancel');
   if (avPromptsCancel) avPromptsCancel.addEventListener('click', () => { avPromptsPanel.style.display = 'none'; });
+
+  // Preset loaders in prompt editor
+  document.querySelectorAll('.av-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.cat;
+      const approved = (avState && avState.approvedServicePrompts) || {};
+      const toAdd = [];
+      if (cat === 'all') {
+        Object.values(approved).forEach(list => { if (Array.isArray(list)) toAdd.push(...list); });
+      } else if (Array.isArray(approved[cat])) {
+        toAdd.push(...approved[cat]);
+      }
+      if (!toAdd.length) return;
+      const current = avPromptsText.value.split('\n').map(s => s.trim()).filter(Boolean);
+      const combined = Array.from(new Set([...current, ...toAdd])).slice(0, 25);
+      avPromptsText.value = combined.join('\n');
+    });
+  });
+
   const avPromptsSave = avEl('av-prompts-save');
   if (avPromptsSave) avPromptsSave.addEventListener('click', async () => {
     const list = avPromptsText.value.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 25);
@@ -496,6 +531,24 @@
       avPromptsPanel.style.display = 'none';
     } catch (e) { alert('Could not save prompts: ' + e.message); }
     finally { avPromptsSave.disabled = false; avPromptsSave.innerText = 'Save prompts'; }
+  });
+
+  const avPromptsMerge = avEl('av-prompts-merge');
+  if (avPromptsMerge) avPromptsMerge.addEventListener('click', async () => {
+    const list = avPromptsText.value.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 25);
+    if (!list.length) { alert('Add at least one search prompt.'); return; }
+    avPromptsMerge.disabled = true; avPromptsMerge.innerText = 'Merging…';
+    try {
+      const r = await authFetch('/api/ai-visibility/prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompts: list, preserveExisting: true }),
+      });
+      const d = await r.json(); if (!r.ok || !d.success) throw new Error(d.error || 'Merge failed');
+      if (avState) avState.prompts = d.prompts;
+      avPromptsPanel.style.display = 'none';
+    } catch (e) { alert('Could not merge prompts: ' + e.message); }
+    finally { avPromptsMerge.disabled = false; avPromptsMerge.innerText = 'Merge & preserve existing'; }
   });
 
   // --- FACTCHECK / BRAND-ACCURACY MONITOR (P4a) ---

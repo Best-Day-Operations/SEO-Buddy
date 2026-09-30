@@ -4,6 +4,8 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const {
+  APPROVED_SERVICE_PROMPTS,
+  PROMPT_SET_VERSION,
   DEFAULT_AI_ENGINES,
   DEFAULT_VIS_PROMPTS,
   createAiVisibilityService,
@@ -728,6 +730,110 @@ test('absent search without search call is labeled model_only and scored separat
   assert.equal(snapshot.perEngine[0].score, null, 'per-engine primary score must be unavailable when search is absent');
   assert.equal(snapshot.perEngine[0].searchScore, null);
   assert.equal(snapshot.perEngine[0].modelScore, 100);
+});
+
+test('service executes approved service questions by category and records promptSetVersion & categories in snapshot metadata', async () => {
+  const executedPrompts = [];
+  const state = { prompts: ['custom prompt'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { GEMINI_API_KEY: 'test-key' },
+    geminiGenerate: async request => {
+      if (request.config?.tools) {
+        executedPrompts.push(request.contents);
+        return {
+          text: 'Best Day Fitness & Wellness in St. Petersburg offers private training and consultations.',
+          candidates: [{ groundingMetadata: { groundingChunks: [{ web: { title: 'Best Day Fitness', uri: 'https://bestdayfitness.com/' } }] } }],
+        };
+      }
+      return {
+        text: JSON.stringify({
+          mentioned: true,
+          recommended: true,
+          sentiment: 'positive',
+          competitors: [],
+        }),
+      };
+    },
+  });
+
+  const { snapshot } = await service.runVisibility(['google'], {
+    serviceCategories: ['consultation', 'haloredRecovery'],
+  });
+
+  assert.ok(snapshot, 'Must return snapshot');
+  assert.equal(snapshot.promptSetVersion, PROMPT_SET_VERSION);
+  assert.deepEqual(snapshot.serviceCategories, ['consultation', 'haloredRecovery']);
+  assert.equal(snapshot.prompts.length, APPROVED_SERVICE_PROMPTS.consultation.length + APPROVED_SERVICE_PROMPTS.haloredRecovery.length);
+
+  for (const answer of snapshot.answers) {
+    assert.ok(answer.serviceCategory === 'consultation' || answer.serviceCategory === 'haloredRecovery',
+      `serviceCategory must be consultation or haloredRecovery, got ${answer.serviceCategory}`);
+    assert.equal(answer.mentioned, true);
+    assert.equal(answer.recommended, true);
+  }
+
+  // Verify all consultation and haloredRecovery prompts were passed to the engine
+  for (const expected of [...APPROVED_SERVICE_PROMPTS.consultation, ...APPROVED_SERVICE_PROMPTS.haloredRecovery]) {
+    assert.ok(executedPrompts.some(p => p.includes(expected)), `Engine must receive prompt: ${expected}`);
+  }
+});
+
+test('routes preserve user-defined prompts when adding or refreshing approved service prompts', () => {
+  const { registerAiVisibilityRoutes } = require('../lib/ai-visibility-routes.js');
+  const routes = {};
+  const mockApp = {
+    get: (path, ...handlers) => { routes['GET ' + path] = handlers[handlers.length - 1]; },
+    post: (path, ...handlers) => { routes['POST ' + path] = handlers[handlers.length - 1]; },
+  };
+
+  const state = {
+    prompts: ['my proprietary user query about balance', 'my custom senior mobility test'],
+    snapshots: [],
+    updatedAt: null,
+    lastRun: null,
+  };
+  let saved = false;
+
+  registerAiVisibilityRoutes(mockApp, {
+    requireAuth: (req, res, next) => next(),
+    state,
+    nudgeSchedule: () => {},
+    brandName: () => 'Best Day Fitness',
+    enginesStatus: () => [{ id: 'google', label: 'Google', configured: true }],
+    trend: () => ({ series: [], metricLines: {}, dates: [] }),
+    anyConfigured: () => true,
+    runVisibility: async () => ({ ok: true }),
+    usageOverBudget: () => false,
+    budgetBlock: () => {},
+    save: () => { saved = true; },
+    defaultPrompts: DEFAULT_VIS_PROMPTS,
+    approvedServicePrompts: APPROVED_SERVICE_PROMPTS,
+    promptSetVersion: PROMPT_SET_VERSION,
+  });
+
+  // Test 1: Adding a category with mode="merge" preserves user's custom prompts
+  const req1 = {
+    body: {
+      category: 'consultation',
+      mode: 'merge',
+    },
+  };
+  let jsonResult1 = null;
+  const res1 = { json: data => { jsonResult1 = data; return data; } };
+
+  routes['POST /api/ai-visibility/prompts'](req1, res1);
+
+  assert.equal(jsonResult1.success, true);
+  assert.equal(jsonResult1.promptSetVersion, PROMPT_SET_VERSION);
+  // User's custom prompts MUST be preserved!
+  assert.ok(state.prompts.includes('my proprietary user query about balance'));
+  assert.ok(state.prompts.includes('my custom senior mobility test'));
+  // Consultation prompts MUST be added!
+  for (const q of APPROVED_SERVICE_PROMPTS.consultation) {
+    assert.ok(state.prompts.includes(q), `Expected consultation query "${q}" in state.prompts`);
+  }
+  assert.equal(saved, true);
 });
 
 

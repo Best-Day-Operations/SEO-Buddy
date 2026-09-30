@@ -51,7 +51,7 @@ const { createContentAutopilotService } = require('./lib/content-autopilot-servi
 const { recordGbpPublication, gbpPublicationStatus } = require('./lib/gbp-publication');
 const { registerContentRoutes } = require('./lib/content-routes');
 const { registerAiVisibilityRoutes } = require('./lib/ai-visibility-routes');
-const { DEFAULT_AI_ENGINES, DEFAULT_VIS_PROMPTS, createAiVisibilityService } = require('./lib/ai-visibility-service');
+const { DEFAULT_AI_ENGINES, DEFAULT_VIS_PROMPTS, APPROVED_SERVICE_PROMPTS, PROMPT_SET_VERSION, createAiVisibilityService } = require('./lib/ai-visibility-service');
 const { registerAiAuditRoutes } = require('./lib/ai-audit-routes');
 const { buildFactTruth, createAiFactCheckService } = require('./lib/ai-factcheck-service');
 const { createAiCrawlerService } = require('./lib/ai-crawler-service');
@@ -1062,6 +1062,8 @@ registerAiVisibilityRoutes(app, {
   budgetBlock,
   save: saveAiVis,
   defaultPrompts: DEFAULT_VIS_PROMPTS,
+  approvedServicePrompts: APPROVED_SERVICE_PROMPTS,
+  promptSetVersion: PROMPT_SET_VERSION,
   logger: console,
 });
 
@@ -1233,6 +1235,9 @@ app.post('/api/website-audit/run', requireAuth, async (req, res) => {
   const result = await websiteAuditService.run(targetUrl);
   if (!result.ok && result.busy) {
     return res.json({ success: true, busy: true });
+  }
+  if (!result.ok && result.error && (result.error.includes('Disallowed target host') || result.error.includes('Invalid URL'))) {
+    return res.status(400).json({ success: false, error: result.error, snapshot: result.snapshot });
   }
   return res.json({ success: result.ok, snapshot: result.snapshot, error: result.error });
 });

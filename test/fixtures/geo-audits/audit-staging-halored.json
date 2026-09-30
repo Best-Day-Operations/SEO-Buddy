@@ -1,0 +1,644 @@
+{
+  "url": "http://127.0.0.1:8877/halored.html",
+  "timestamp": "2026-09-30T16:58:45.814254+00:00",
+  "score": 33,
+  "band": "critical",
+  "error": null,
+  "checks": {
+    "robots_txt": {
+      "score": 0,
+      "max": 18,
+      "passed": false,
+      "details": {
+        "found": false,
+        "bots_allowed": [],
+        "bots_missing": [],
+        "bots_blocked": [],
+        "bots_partial": [],
+        "citation_bots_ok": false,
+        "crawl_delay": null,
+        "citation_bots_explicit": false
+      }
+    },
+    "llms_txt": {
+      "score": 0,
+      "max": 18,
+      "passed": false,
+      "details": {
+        "found": false,
+        "has_h1": false,
+        "has_description": false,
+        "has_sections": false,
+        "has_links": false,
+        "word_count": 0,
+        "has_full": false,
+        "sections_count": 0,
+        "links_count": 0,
+        "has_blockquote": false,
+        "has_optional_section": false,
+        "companion_files_hint": false,
+        "validation_warnings": [],
+        "blocked_by_cdn": false
+      }
+    },
+    "schema_jsonld": {
+      "score": 5,
+      "max": 16,
+      "passed": false,
+      "details": {
+        "has_website": false,
+        "has_webapp": false,
+        "has_faq": false,
+        "found_types": [
+          "HealthClub"
+        ]
+      }
+    },
+    "meta_tags": {
+      "score": 14,
+      "max": 14,
+      "passed": true,
+      "details": {
+        "has_title": true,
+        "has_description": true,
+        "has_canonical": true,
+        "has_og_title": true,
+        "has_og_description": true,
+        "has_og_image": true,
+        "title_text": "HaloRed O\u00e2\u0082\u0082: Salt Therapy, Red Light & Oxygen | St. Petersburg FL",
+        "description_text": "Experience HaloRed O\u00e2\u0082\u0082 at Best Day Fitness in St. Petersburg: dry salt therapy, red light, and oxygen together in one private, seated session. From $39.99.",
+        "description_length": 156,
+        "title_length": 66,
+        "canonical_url": "https://bestdayfitness.com/halored",
+        "x_robots_noindex": false,
+        "x_robots_tag": "",
+        "has_noai": false,
+        "noai_value": ""
+      }
+    },
+    "content": {
+      "score": 12,
+      "max": 12,
+      "passed": true,
+      "details": {
+        "has_h1": true,
+        "heading_count": 30,
+        "has_numbers": true,
+        "has_links": true,
+        "word_count": 3158,
+        "h1_text": "Breathe Deep. Unwind. Get Back to Your Best Day.",
+        "numbers_count": 113,
+        "external_links_count": 2,
+        "has_heading_hierarchy": true,
+        "has_lists_or_tables": true,
+        "has_front_loading": true
+      }
+    },
+    "signals": {
+      "score": 3,
+      "max": 6,
+      "passed": true,
+      "details": {
+        "has_lang": true,
+        "lang_value": "en",
+        "has_rss": false,
+        "rss_url": "",
+        "has_freshness": false,
+        "freshness_date": ""
+      }
+    },
+    "ai_discovery": {
+      "score": 0,
+      "max": 6,
+      "passed": false,
+      "details": {
+        "has_well_known_ai": false,
+        "has_summary": false,
+        "has_faq": false,
+        "has_service": false,
+        "summary_valid": false,
+        "faq_count": 0,
+        "endpoints_found": 0,
+        "has_webmcp_declaration": false,
+        "webmcp_declared_tool_count": 0
+      }
+    },
+    "brand_entity": {
+      "score": 2,
+      "max": 10,
+      "passed": true,
+      "details": {
+        "brand_name_consistent": true,
+        "names_found": [
+          "Breathe Deep. Unwind. Get Back to Your Best Day.",
+          "HaloRed O\u00e2\u0082\u0082: Salt Therapy, Red Light & Oxygen",
+          "HaloRed O\u00e2\u0082\u0082: Salt Therapy, Red Light & Oxygen"
+        ],
+        "primary_name": "HaloRed O\u00e2\u0082\u0082: Salt Therapy, Red Light & Oxygen",
+        "schema_desc_matches_meta": false,
+        "kg_pillar_count": 0,
+        "kg_pillar_urls": [],
+        "has_wikipedia": false,
+        "has_wikidata": false,
+        "has_linkedin": false,
+        "has_crunchbase": false,
+        "has_about_link": false,
+        "has_contact_info": false,
+        "has_geo_schema": false,
+        "has_hreflang": false,
+        "hreflang_count": 0,
+        "faq_depth": 0,
+        "has_recent_articles": false
+      }
+    }
+  },
+  "score_breakdown": {
+    "robots": 0,
+    "llms": 0,
+    "schema": 5,
+    "meta": 14,
+    "content": 12,
+    "signals": 3,
+    "ai_discovery": 0,
+    "brand_entity": 2,
+    "negative_penalty": -3
+  },
+  "recommendations": [
+    "Hidden text detected (display:none/visibility:hidden with content) \u2014 AI crawlers can read it and may penalize this cloaking pattern",
+    "Injection pattern found on a page that also exposes user-generated content ('hr-staff-review-confirmation' region) \u2014 the payload may be a third-party comment/review, not your own markup. Moderate the UGC area, mark links inside it rel=\"ugc\", and consider excluding unmoderated UGC from AI crawlers.",
+    "Create robots.txt with Allow rules for AI bots (GPTBot, ClaudeBot, PerplexityBot)",
+    "Create /llms.txt for AI indexing: geo llms --base-url http://127.0.0.1:8877/halored.html. Note: llms.txt is an organizational signal, not a proven ranking factor. It helps structure content for AI systems.",
+    "Add WebSite JSON-LD schema to homepage",
+    "Add Organization JSON-LD schema with name, url, and logo",
+    "Add FAQPage schema with site FAQs",
+    "Add sameAs links in Organization schema to Wikipedia, Wikidata, LinkedIn, or Crunchbase for Knowledge Graph disambiguation",
+    "Add a visible /about or /chi-siamo link to build trust signals for AI",
+    "Add address, telephone or contactPoint to Organization schema for entity validation",
+    "Keyword stuffing detected: 'your' at 2.6% density \u2014 diversify vocabulary",
+    "Create /.well-known/ai.txt to define AI crawler permissions",
+    "Create /ai/summary.json with site name and description for AI engines",
+    "Create /ai/faq.json with structured FAQ for AI search visibility",
+    "Create /ai/service.json to describe service capabilities for AI",
+    "Add RSS/Atom feed and link it in <head> with <link rel=\"alternate\" type=\"application/rss+xml\"> for AI discovery",
+    "Add potentialAction (SearchAction) to WebSite schema for AI agent discoverability",
+    "Add descriptive labels to forms (label, aria-label) to make them usable by AI agents",
+    "Consider adding WebMCP toolname/tooldescription attributes to interactive elements for Chrome AI agent support"
+  ],
+  "webmcp": {
+    "readiness_level": "none",
+    "agent_ready": false,
+    "has_register_tool": false,
+    "has_tool_attributes": false,
+    "tool_count": 0,
+    "has_potential_action": false,
+    "potential_actions": [],
+    "has_labeled_forms": false,
+    "labeled_forms_count": 0,
+    "has_openapi": false,
+    "has_webmcp_declaration": false,
+    "declared_tool_count": 0
+  },
+  "negative_signals": {
+    "severity": "medium",
+    "signals_found": 3,
+    "cta_density_high": false,
+    "cta_count": 1,
+    "has_popup_signals": true,
+    "is_thin_content": false,
+    "broken_links_count": 0,
+    "has_keyword_stuffing": true,
+    "has_author_signal": false,
+    "boilerplate_ratio": 0.07,
+    "has_mixed_signals": false
+  },
+  "cdn_check": {
+    "checked": true,
+    "browser_status": 200,
+    "browser_content_length": 83740,
+    "bot_results": [
+      {
+        "bot": "GPTBot",
+        "status": 200,
+        "content_length": 83740,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "OAI-SearchBot",
+        "status": 200,
+        "content_length": 83740,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "PerplexityBot",
+        "status": 200,
+        "content_length": 83740,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Claude-SearchBot",
+        "status": 200,
+        "content_length": 83740,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Googlebot",
+        "status": 200,
+        "content_length": 83740,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Applebot",
+        "status": 200,
+        "content_length": 83740,
+        "blocked": false,
+        "challenge_detected": false
+      }
+    ],
+    "any_blocked": false,
+    "cdn_detected": "",
+    "cdn_headers": {
+      "server": "SimpleHTTP/0.6 Python/3.11.9"
+    },
+    "error": ""
+  },
+  "js_rendering": {
+    "checked": true,
+    "raw_word_count": 3146,
+    "raw_heading_count": 32,
+    "has_empty_root": false,
+    "has_noscript_content": false,
+    "framework_detected": "",
+    "js_dependent": false,
+    "details": "3146 words and 32 headings found in raw HTML. Content is accessible without JavaScript."
+  },
+  "multimodal": {
+    "checked": true,
+    "total_images": 7,
+    "images_with_alt": 7,
+    "alt_coverage": 1.0,
+    "caption_count": 0,
+    "has_video": false,
+    "video_count": 0,
+    "has_video_schema": false,
+    "has_video_captions": false,
+    "has_audio": false,
+    "has_audio_schema": false,
+    "has_transcript": false,
+    "readiness_level": "good"
+  },
+  "trust_stack": {
+    "checked": true,
+    "technical": {
+      "name": "technical",
+      "label": "Technical Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [
+        "HTTPS not enabled",
+        "Strict-Transport-Security header missing",
+        "Content-Security-Policy header missing",
+        "X-Frame-Options header missing"
+      ],
+      "details": {}
+    },
+    "identity": {
+      "name": "identity",
+      "label": "Identity Trust",
+      "score": 1,
+      "max_score": 5,
+      "signals_found": [
+        "Brand name consistent"
+      ],
+      "signals_missing": [
+        "No about page link found",
+        "No contact information in schema",
+        "No Organization JSON-LD schema",
+        "No author attribution found"
+      ],
+      "details": {}
+    },
+    "social": {
+      "name": "social",
+      "label": "Social Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [
+        "No sameAs links in schema",
+        "No Knowledge Graph pillar links",
+        "No reviews or testimonials found",
+        "No social media profile links"
+      ],
+      "details": {}
+    },
+    "academic": {
+      "name": "academic",
+      "label": "Academic Trust",
+      "score": 3,
+      "max_score": 5,
+      "signals_found": [
+        "Numbers cited (113)",
+        "External sources (2 non-social links)",
+        "Original statistics (2 patterns)"
+      ],
+      "signals_missing": [
+        "No links to authoritative sources (DOI, PubMed, Scholar)",
+        "No References/Sources section"
+      ],
+      "details": {
+        "authoritative_domains": [],
+        "statistics_count": 2,
+        "numbers_count": 113
+      }
+    },
+    "consistency": {
+      "name": "consistency",
+      "label": "Consistency Trust",
+      "score": 3,
+      "max_score": 5,
+      "signals_found": [
+        "Brand name consistent across title/H1/schema",
+        "No mixed signals"
+      ],
+      "signals_missing": [
+        "Schema description differs from meta description",
+        "No dateModified in schema"
+      ],
+      "details": {}
+    },
+    "composite_score": 7,
+    "grade": "D",
+    "trust_level": "low"
+  },
+  "prompt_injection": {
+    "checked": true,
+    "hidden_text_found": true,
+    "hidden_text_count": 21,
+    "hidden_text_samples": [
+      "Enter 6-digit code sent to:Verify",
+      "Verified Member:",
+      "Guest Booking: Standard Public Rate"
+    ],
+    "invisible_unicode_found": false,
+    "invisible_unicode_count": 0,
+    "llm_instruction_found": false,
+    "llm_instruction_count": 0,
+    "llm_instruction_samples": [],
+    "html_comment_injection_found": false,
+    "html_comment_injection_count": 0,
+    "html_comment_samples": [],
+    "monochrome_text_found": false,
+    "monochrome_text_count": 0,
+    "microfont_found": false,
+    "microfont_count": 0,
+    "data_attr_injection_found": false,
+    "data_attr_injection_count": 0,
+    "data_attr_samples": [],
+    "aria_hidden_injection_found": false,
+    "aria_hidden_injection_count": 0,
+    "aria_hidden_samples": [],
+    "ugc_surface_found": true,
+    "ugc_surface_samples": [
+      "'hr-staff-review-confirmation' region"
+    ],
+    "ugc_injection_risk": true,
+    "patterns_found": 1,
+    "severity": "suspicious",
+    "risk_level": "medium"
+  },
+  "rag_chunk": {
+    "checked": true,
+    "total_sections": 30,
+    "sections_in_range": 3,
+    "avg_section_words": 64.6,
+    "has_definition_opening": false,
+    "heading_as_boundary_ratio": 1.07,
+    "anchor_sentences": 132,
+    "chunk_readiness_score": 56
+  },
+  "embedding_proximity": {
+    "checked": true,
+    "skipped_reason": "sentence-transformers not installed (pip install geo-optimizer-skill[embedding])",
+    "model_name": "",
+    "query_scores": [],
+    "avg_similarity": 0.0,
+    "top_similarity": 0.0,
+    "retrievable_chunks": 0,
+    "total_chunks": 0
+  },
+  "content_decay": {
+    "checked": true,
+    "signals": [
+      {
+        "decay_type": "temporal",
+        "text": "nce Get Directions \u2192 \u00a9 2010\u00e2\u0080\u00932026 Best Day Fitness & Wellness.",
+        "estimated_stale_days": 365,
+        "suggestion": "Use relative time or add dateModified schema for freshness signals"
+      },
+      {
+        "decay_type": "price",
+        "text": "y 15-Minute Session $39.99 for 15 minutes Expl",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "revived and alert ($0 separate surcharge)",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "separate surcharge ($0 add-on). The enrich",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "ession (15 Minutes) $39.99 / session Dry salt",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "xygen all included ($0 oxygen surcharge) A",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": ") Add extra time at $2.00 per minute (up to 3",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "r between sessions ($0 fee) Free cancellat",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "ook Single Session ($39.99) Best Value Regular",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "d O\u00e2\u0082\u0082 Monthly Plan $299 / month for active Best Day",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "ublic monthly rate: $399 / month (save $100/mo as a",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "$399 / month (save $100/mo as a gym member) Fi",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "ded on every visit ($0 base charge) Add ex",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": ") Add extra time at $2.00 per minute up to 30",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "cancel anytime with $0 fee Select Monthly",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "for oxygen. 15 min ($39.99) 18 min ($45.99) 20",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "in ($39.99) 18 min ($45.99) 20 min ($49.99) 30",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "in ($45.99) 20 min ($49.99) 30 min ($69.99) Se",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "in ($49.99) 30 min ($69.99) Session Length (15",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "es): 15 Minutes \u00e2\u0080\u0094 $39.99 (Standard / $0 with",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      }
+    ],
+    "earliest_decay_days": 180,
+    "decay_risk": "high",
+    "evergreen_score": 35
+  },
+  "platform_citation": {
+    "checked": true,
+    "platforms": [
+      {
+        "platform": "chatgpt",
+        "score": 18,
+        "strengths": [
+          "Well-structured content"
+        ],
+        "recommendations": [
+          "Allow GPTBot in robots.txt",
+          "Add /llms.txt for LLM-friendly site summary",
+          "Add FAQPage schema for Q&A-style answers",
+          "Add Organization schema for entity clarity"
+        ]
+      },
+      {
+        "platform": "perplexity",
+        "score": 10,
+        "strengths": [
+          "Substantial content depth"
+        ],
+        "recommendations": [
+          "Allow PerplexityBot in robots.txt",
+          "Add /llms.txt with links to key resources",
+          "Add dateModified schema or freshness indicators",
+          "Add external links to authoritative sources"
+        ]
+      },
+      {
+        "platform": "google_ai",
+        "score": 59,
+        "strengths": [
+          "Complete meta tags",
+          "Open Graph tags present",
+          "Quality content structure",
+          "Content available without JS (SSR-safe)",
+          "Descriptive image alt text"
+        ],
+        "recommendations": [
+          "Allow Google-Extended in robots.txt",
+          "Add more schema types for richer structured data",
+          "Add dateModified / lastmod freshness signals",
+          "Add sameAs links to social profiles and Wikipedia"
+        ]
+      }
+    ]
+  },
+  "context_window": {
+    "checked": true,
+    "total_words": 3146,
+    "total_tokens_estimate": 4089,
+    "front_loaded_ratio": 0.17,
+    "key_info_tokens": 2964,
+    "filler_ratio": 0.01,
+    "optimal_for": [
+      "chatgpt",
+      "claude"
+    ],
+    "truncation_risk": "medium",
+    "context_efficiency_score": 63
+  },
+  "instruction_readiness": {
+    "checked": true,
+    "labeled_buttons": 34,
+    "unlabeled_buttons": 0,
+    "action_clarity_score": 100,
+    "total_inputs": 15,
+    "labeled_inputs": 15,
+    "typed_inputs": 15,
+    "form_readability_score": 100,
+    "nav_links": 59,
+    "stateful_urls": true,
+    "has_aria_live": false,
+    "has_error_roles": false,
+    "readiness_score": 75,
+    "readiness_level": "ready"
+  },
+  "http_status": 200,
+  "page_size": 83740,
+  "audit_duration_ms": 582
+}
