@@ -263,3 +263,75 @@ test('author bio removes unverified default tagline unless explicitly configured
   assert.match(envBioResult.content, /Expert Fitness Coach at Best Day Fitness\./);
 });
 
+test('service-specific factual validation disentangles consultation duration from personal training duration', async () => {
+  const testCase = fixture();
+
+  // "Your consultation lasts 60 minutes" must fail
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Your consultation lasts 60 minutes.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('45 minutes'),
+  );
+
+  // "Consultations cost $150" must fail
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Consultations cost $150.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // "Personal training sessions are normally 60 minutes, with 30-minute sessions available" must pass cleanly
+  const ptResult = await testCase.service.publish(
+    'Private Personal Training',
+    '<p>Personal training sessions are normally 60 minutes, with 30-minute sessions available. We offer 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(ptResult.success, true);
+
+  // Combined accurate statement passes cleanly
+  const combinedResult = await testCase.service.publish(
+    'Comprehensive Fitness Program',
+    '<p>Schedule your 45-minute consultation for $99. Our personal training sessions are normally 60 minutes, with 30-minute sessions available.</p>',
+    'draft',
+  );
+  assert.equal(combinedResult.success, true);
+});
+
+test('factual validation rejects prohibited claims or invalid facts inside author bio or injected schema', async () => {
+  const testCase = fixture();
+
+  // Prohibited claim inside authorBio
+  await assert.rejects(
+    () => testCase.service.publish(
+      'Clean Body Title',
+      '<p>Our trainers provide 1-on-1 private training.</p>',
+      'draft',
+      { authorBio: 'Senior trainer who cures chronic back pain through movement.' },
+    ),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('cure'),
+  );
+
+  // Prohibited duration inside authorBio
+  await assert.rejects(
+    () => testCase.service.publish(
+      'Clean Body Title',
+      '<p>Our trainers provide 1-on-1 private training.</p>',
+      'draft',
+      { authorBio: 'Schedule an initial 60-minute consultation with me.' },
+    ),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('45 minutes'),
+  );
+
+  // Prohibited claim inside custom injected schema via buildLocalBusinessSchema override
+  const schemaTestCase = fixture({
+    buildLocalBusinessSchema: domain => ({
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      description: 'We offer semi-private training classes for everyone.',
+      url: domain,
+    }),
+  });
+  await assert.rejects(
+    () => schemaTestCase.service.publish('Clean Body Title', '<p>Healthy living tips.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('1-on-1 private training'),
+  );
+});
+
