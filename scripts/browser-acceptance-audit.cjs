@@ -394,20 +394,22 @@ async function runBrowserAcceptance() {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       const aio = document.getElementById('aio-tab');
       if (aio) aio.classList.add('active');
-      if (typeof window.loadAiVisibility === 'function') window.loadAiVisibility('all');
     });
-    await pause(300);
+    await pause(200);
 
     const filterExists = await page.$('#av-service-filter');
     if (filterExists) {
       await page.selectOption('#av-service-filter', 'physicalTherapy');
-      await pause(400);
+
+      // Wait for loadAiVisibility async fetch to resolve and render #av-empty
+      await page.waitForFunction(() => {
+        const el = document.getElementById('av-empty');
+        return el && el.style.display !== 'none' && el.innerText.includes('physicalTherapy');
+      }, { timeout: 15000 });
+
       const selectedVal = await page.$eval('#av-service-filter', el => el.value);
       assert.equal(selectedVal, 'physicalTherapy', 'Service filter must keep physicalTherapy selected');
 
-      // Verify empty state is displayed for unmeasured category without crashing
-      const emptyVisible = await page.$eval('#av-empty', el => el.style.display !== 'none');
-      assert.ok(emptyVisible, 'Empty state must be visible for unmeasured category');
       const emptyText = await page.$eval('#av-empty', el => el.innerText);
       assert.ok(emptyText.includes('physicalTherapy'), 'Empty state text must describe unmeasured service category');
       console.log('UI verified: physicalTherapy selected and empty state rendered properly.');
