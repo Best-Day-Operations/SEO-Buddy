@@ -1192,12 +1192,17 @@ registerAiAuditRoutes(app, {
 // metadata, robots, schema graphs, content clarity, and asset bloat.
 // ============================================================
 const WEBSITE_AUDIT_FILE = path.join(DATA_DIR, 'website-audit.json');
-let websiteAuditDb = { latest: null, updatedAt: null, history: [] };
+let websiteAuditDb = { latest: null, updatedAt: null, history: [], evidence: {} };
 if (fs.existsSync(WEBSITE_AUDIT_FILE)) {
   try {
     const l = JSON.parse(fs.readFileSync(WEBSITE_AUDIT_FILE, 'utf8'));
     if (l && typeof l === 'object') {
-      websiteAuditDb = { latest: l.latest || null, updatedAt: l.updatedAt || null, history: Array.isArray(l.history) ? l.history : [] };
+      websiteAuditDb = {
+        latest: l.latest || null,
+        updatedAt: l.updatedAt || null,
+        history: Array.isArray(l.history) ? l.history : [],
+        evidence: l.evidence && typeof l.evidence === 'object' ? l.evidence : {},
+      };
     }
   } catch (e) {}
 } else {

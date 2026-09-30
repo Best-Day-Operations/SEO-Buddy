@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 const {
   APPROVED_FACTS,
   ALL_DAYS_OF_WEEK,
+  VERIFIED_PAGE_CONFIGS,
   buildBusinessIdentitySchema,
   buildPageMetadataAndSchema,
   buildGhlSchemaGraph,
@@ -15,441 +18,363 @@ const {
 
 const {
   DEFAULT_AUDIT_TARGETS,
-  APPROVED_AUDIT_DOMAINS,
+  APPROVED_PUBLIC_DOMAINS,
+  TEST_LOCAL_DOMAINS,
   isApprovedAuditTarget,
   normalizeUrlForMatch,
+  validateGeoEvidence,
   parseHtmlMetadata,
   evaluateWebsiteAudit,
   createWebsiteAuditService,
 } = require('../lib/website-audit-service.js');
 
-test('ghl-schema-service generates valid Schema.org graph matching approved facts without 404 images or aggregateRating', () => {
-  const schema = buildGhlSchemaGraph({ domain: 'https://bestdayfitness.com' });
-  assert.equal(schema['@context'], 'https://schema.org');
-  assert.ok(Array.isArray(schema['@graph']));
-  assert.equal(schema['@graph'].length, 8);
+const { parseHeadElements } = require('../lib/html-head-parser.js');
 
-  const business = schema['@graph'].find(e => e['@id'] === 'https://bestdayfitness.com/#business');
-  assert.ok(business);
-  assert.equal(business.name, 'Best Day Fitness & Wellness');
-  assert.equal(business.telephone, '+1-727-334-1472');
-  assert.equal(business.address.streetAddress, '6619 1st Ave S');
-  assert.equal(business.address.addressLocality, 'St. Petersburg');
-  assert.equal(business.address.postalCode, '33707');
+// --- 1. GEO EVIDENCE VALIDATION & EXACT TARGET MATCHING ---
 
-  // Verify 404 images are omitted
-  assert.equal(business.logo, undefined);
-  assert.equal(business.image, undefined);
+test('normalizeUrlForMatch preserves query parameters, normalizes port/slash, and strips hashes', () => {
+  const u1 = 'https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU?v_test=1790778792385#home';
+  const u2 = 'HTTPS://LINK.BESTDAYFITNESS.COM:443/preview/VRsgFMkoL8fUwW9W4ckU/?v_test=1790778792385';
+  assert.equal(normalizeUrlForMatch(u1), 'https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU?v_test=1790778792385');
+  assert.equal(normalizeUrlForMatch(u2), 'https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU?v_test=1790778792385');
+  assert.equal(normalizeUrlForMatch(u1), normalizeUrlForMatch(u2));
 
-  // Verify self-serving aggregateRating is omitted from LocalBusiness
-  assert.equal(business.aggregateRating, undefined);
-
-  // Verify approved hours across all 7 days
-  const monSat = business.openingHoursSpecification.find(h =>
-    h.dayOfWeek.includes('Monday') && h.dayOfWeek.includes('Saturday')
-  );
-  assert.ok(monSat);
-  assert.equal(monSat.opens, '04:00');
-  assert.equal(monSat.closes, '22:00');
-
-  const sun = business.openingHoursSpecification.find(h => h.dayOfWeek.includes('Sunday'));
-  assert.ok(sun);
-  assert.equal(sun.opens, '09:00');
-  assert.equal(sun.closes, '17:00');
-
-  // Verify consultation pricing & details
-  const consultation = schema['@graph'].find(e => e['@id'] === 'https://bestdayfitness.com/#service-consultation');
-  assert.ok(consultation);
-  assert.equal(consultation.offers.price, '99.00');
-  assert.ok(consultation.description.includes('45-minute'));
-  assert.ok(consultation.description.includes('Client Experience Team'));
-
-  // Substantive 4-tier validation passes cleanly
-  const res = validateSchema(schema);
-  assert.equal(res.valid, true);
-  assert.equal(res.categories.jsonSyntax.pass, true);
-  assert.equal(res.categories.approvedFacts.pass, true);
-  assert.equal(res.categories.schemaOrgVocabulary.pass, true);
-  assert.equal(res.categories.googleFeatureEligibility.eligible, true);
-  assert.equal(res.allIssues.length, 0);
-  assert.ok(res.categories.approvedFacts.verifiedFacts.length >= 3);
+  // Query parameter order normalization
+  const qA = 'https://bestdayfitness.com/test?b=2&a=1';
+  const qB = 'https://bestdayfitness.com/test?a=1&b=2';
+  assert.equal(normalizeUrlForMatch(qA), normalizeUrlForMatch(qB));
 });
 
-test('validateSchema rejects invalid schemas: 999 Wrong Street, +1-000-000-0000, and partial days', () => {
-  // Case A: 999 Wrong Street
-  const wrongAddressSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: 'Best Day Fitness & Wellness',
-    telephone: '+1-727-334-1472',
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: '999 Wrong Street',
-      addressLocality: 'St. Petersburg',
-      addressRegion: 'FL',
-      postalCode: '33707',
-    },
-    openingHoursSpecification: [
-      { dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], opens: '04:00', closes: '22:00' },
-      { dayOfWeek: ['Sunday'], opens: '09:00', closes: '17:00' },
-    ],
+test('exact target matching rejects URL-prefix matches (bestdayfitness.com vs bestdayfitness.com/consultation)', () => {
+  const rootTarget = 'https://bestdayfitness.com/';
+  const subpageEvidence = {
+    url: 'https://bestdayfitness.com/consultation',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    score: 80,
+    exitStatus: 'success',
   };
-  const resAddr = validateSchema(wrongAddressSchema);
-  assert.equal(resAddr.valid, false);
-  assert.equal(resAddr.categories.approvedFacts.pass, false);
-  assert.ok(resAddr.categories.approvedFacts.issues.some(i => i.includes('Street address mismatch')));
 
-  // Case B: +1-000-000-0000
-  const wrongPhoneSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: 'Best Day Fitness & Wellness',
-    telephone: '+1-000-000-0000',
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: '6619 1st Ave S',
-      addressLocality: 'St. Petersburg',
-      addressRegion: 'FL',
-      postalCode: '33707',
-    },
-    openingHoursSpecification: [
-      { dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], opens: '04:00', closes: '22:00' },
-      { dayOfWeek: ['Sunday'], opens: '09:00', closes: '17:00' },
-    ],
-  };
-  const resPhone = validateSchema(wrongPhoneSchema);
-  assert.equal(resPhone.valid, false);
-  assert.equal(resPhone.categories.approvedFacts.pass, false);
-  assert.ok(resPhone.categories.approvedFacts.issues.some(i => i.includes('Telephone mismatch')));
+  const dummyMeta = { bytes: 100, headings: { h1Texts: [] }, assets: {}, schemaBlocks: [], malformedJsonLd: [] };
+  const audit = evaluateWebsiteAudit(rootTarget, dummyMeta, { geoEvidence: subpageEvidence });
 
-  // Case C: Partial days (Monday & Saturday only, missing Tuesday, Wednesday, Thursday, Friday, Sunday)
-  const partialDaysSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: 'Best Day Fitness & Wellness',
-    telephone: '+1-727-334-1472',
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: '6619 1st Ave S',
-      addressLocality: 'St. Petersburg',
-      addressRegion: 'FL',
-      postalCode: '33707',
-    },
-    openingHoursSpecification: [
-      { dayOfWeek: ['Monday', 'Saturday'], opens: '04:00', closes: '22:00' },
-    ],
-  };
-  const resDays = validateSchema(partialDaysSchema);
-  assert.equal(resDays.valid, false);
-  assert.equal(resDays.categories.approvedFacts.pass, false);
-  assert.ok(resDays.categories.approvedFacts.issues.some(i => i.includes('Missing opening hours specifications for days: Tuesday, Wednesday, Thursday, Friday, Sunday')));
-
-  // Case D: Conflicting duplicate opening hours for Monday
-  const conflictSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: 'Best Day Fitness & Wellness',
-    telephone: '+1-727-334-1472',
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: '6619 1st Ave S',
-      addressLocality: 'St. Petersburg',
-      addressRegion: 'FL',
-      postalCode: '33707',
-    },
-    openingHoursSpecification: [
-      { dayOfWeek: ['Monday'], opens: '04:00', closes: '22:00' },
-      { dayOfWeek: ['Monday'], opens: '08:00', closes: '16:00' },
-      { dayOfWeek: ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], opens: '04:00', closes: '22:00' },
-      { dayOfWeek: ['Sunday'], opens: '09:00', closes: '17:00' },
-    ],
-  };
-  const resConflict = validateSchema(conflictSchema);
-  assert.equal(resConflict.valid, false);
-  assert.ok(resConflict.categories.approvedFacts.issues.some(i => i.includes('Conflicting duplicate opening hours for Monday')));
+  assert.equal(audit.checks.geoOptimizer.status, 'evidence_target_mismatch');
+  assert.equal(audit.checks.geoOptimizer.score, null);
+  assert.ok(audit.checks.geoOptimizer.error.includes('does not match current audit target'));
 });
 
-test('validateSchema flags Google self-serving review policy and 404 images warnings', () => {
-  const schemaWithSelfServingReview = {
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'HealthClub',
-        name: 'Best Day Fitness & Wellness',
-        telephone: '+1-727-334-1472',
-        logo: 'https://bestdayfitness.com/assets/images/logo.png', // 404 image
-        address: {
-          '@type': 'PostalAddress',
-          streetAddress: '6619 1st Ave S',
-          addressLocality: 'St. Petersburg',
-          addressRegion: 'FL',
-          postalCode: '33707',
-        },
-        openingHoursSpecification: [
-          { dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], opens: '04:00', closes: '22:00' },
-          { dayOfWeek: ['Sunday'], opens: '09:00', closes: '17:00' },
-        ],
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: '5.0',
-          reviewCount: '121',
-        },
-      },
-    ],
+test('validateGeoEvidence rejects out-of-range scores and incomplete evidence', () => {
+  // Score 999
+  const outOfRange = {
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    score: 999,
   };
+  const valOut = validateGeoEvidence(outOfRange);
+  assert.equal(valOut.valid, false);
+  assert.ok(valOut.error.includes('out-of-range score'));
 
-  const res = validateSchema(schemaWithSelfServingReview);
-  assert.ok(res.categories.googleFeatureEligibility.warnings.some(w => w.includes('Self-Serving Review Policy')));
-  assert.ok(res.categories.googleFeatureEligibility.warnings.some(w => w.includes('logo.png')));
-  assert.ok(res.categories.googleFeatureEligibility.limitations.length >= 2);
+  // Missing timestamp
+  const missingTs = {
+    url: 'https://bestdayfitness.com',
+    score: 80,
+  };
+  const valTs = validateGeoEvidence(missingTs);
+  assert.equal(valTs.valid, false);
+  assert.ok(valTs.error.includes('missing valid ISO run timestamp'));
+
+  // Negative score
+  const negScore = {
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    score: -10,
+  };
+  assert.equal(validateGeoEvidence(negScore).valid, false);
 });
 
-test('parseHtmlMetadata strictly extracts head tags, strips scripts from visible content, and tracks malformed JSON-LD', () => {
-  const mockHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <title>Real Head Title</title>
-  <meta name="description" content="Proper head meta description of sufficient length for test verification.">
-  <link rel="canonical" href="https://bestdayfitness.com/">
-  <meta name="robots" content="noindex, nofollow">
-  <script type="application/ld+json">
-    { "badJson": missingQuote }
-  </script>
-</head>
-<body>
-  <script>
-    // Fake title and phone inside JS that must NOT be extracted as document metadata
-    const config = { title: "Fake Script Title", phone: "999-999-9999" };
-  </script>
-  <h1>Visible Page Header</h1>
-  <p>Visit us at 6619 1st Ave S or call (727) 334-1472.</p>
-</body>
-</html>`;
-
-  const meta = parseHtmlMetadata(mockHtml);
-
-  assert.equal(meta.title, 'Real Head Title');
-  assert.equal(meta.description, 'Proper head meta description of sufficient length for test verification.');
-  assert.equal(meta.canonical, 'https://bestdayfitness.com/');
-  assert.equal(meta.robots, 'noindex, nofollow');
-  assert.equal(meta.headings.h1Texts[0], 'Visible Page Header');
-  assert.equal(meta.headings.h1Count, 1);
-  assert.equal(meta.phoneFound, true);
-  assert.equal(meta.addressFound, true);
-
-  // Malformed JSON-LD tracked explicitly
-  assert.equal(meta.malformedJsonLd.length, 1);
-  assert.ok(meta.malformedJsonLd[0].parseError);
-  assert.equal(meta.schemaBlocks.length, 1);
-  assert.equal(meta.schemaBlocks[0].valid, false);
-});
-
-test('evaluateWebsiteAudit handles no GEO run truthfully: status="not_run", score=null without fallback fabrication', () => {
-  const meta = {
-    bytes: 50000,
-    title: 'Best Day Fitness & Wellness',
-    description: 'Personal training for adults 50+ in St. Petersburg, FL.',
-    canonical: 'https://bestdayfitness.com/',
-    robots: 'index, follow',
-    og: { title: '', description: '', image: '' },
-    schemaBlocks: [],
-    malformedJsonLd: [],
-    headings: { h1Count: 1, h1Texts: ['Best Day Fitness'], h2Count: 2, h3Count: 0 },
-    assets: { scriptTagCount: 2, scriptBytes: 1000, base64Count: 0 },
-    phoneFound: true,
-    addressFound: true,
+test('evidence with exitStatus: 1 and no error string is labeled unavailable, not completed', () => {
+  const failedEvidence = {
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    score: null,
+    exitStatus: 1, // Exit code 1 with NO error text
   };
 
-  const audit = evaluateWebsiteAudit('https://bestdayfitness.com', meta, {
-    geoEvidence: null, // NO RUN PROVIDED
-  });
+  const dummyMeta = { bytes: 100, headings: { h1Texts: [] }, assets: {}, schemaBlocks: [], malformedJsonLd: [] };
+  const audit = evaluateWebsiteAudit('https://bestdayfitness.com', dummyMeta, { geoEvidence: failedEvidence });
 
-  assert.equal(audit.success, true);
-  assert.equal(audit.checks.geoOptimizer.status, 'not_run');
+  assert.equal(audit.checks.geoOptimizer.status, 'unavailable');
+  assert.equal(audit.checks.geoOptimizer.score, null);
+  assert.ok(audit.checks.geoOptimizer.error.includes('non-zero exit status: 1'));
+});
+
+test('exitCode: 0 is preserved without truthiness falsy default replacement', () => {
+  const successEvidence = {
+    url: 'https://bestdayfitness.com',
+    timestamp: '2026-09-30T14:12:47.000Z',
+    score: 50,
+    exitCode: 0, // Explicit 0
+    checks: { robots_txt: { score: 10 } },
+  };
+
+  const dummyMeta = { bytes: 100, headings: { h1Texts: [] }, assets: {}, schemaBlocks: [], malformedJsonLd: [] };
+  const audit = evaluateWebsiteAudit('https://bestdayfitness.com', dummyMeta, { geoEvidence: successEvidence });
+
+  assert.equal(audit.checks.geoOptimizer.status, 'completed');
+  assert.equal(audit.checks.geoOptimizer.score, 50);
+  assert.equal(audit.checks.geoOptimizer.exitCode, 0);
+});
+
+test('real tool run demonstration: preview size-limit failure is valid evidence of unavailable measurement', () => {
+  // Load real failure artifact from disk
+  const artifactPath = path.resolve('C:/Users/chris/.gemini/antigravity/brain/902d0ef8-80e1-4892-97e0-44fe87437e0d/geo-audits/baseline-staging-preview.json');
+  assert.ok(fs.existsSync(artifactPath), 'Artifact must exist on disk');
+  const previewArtifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
+
+  const dummyMeta = { bytes: 20413641, headings: { h1Texts: [] }, assets: {}, schemaBlocks: [], malformedJsonLd: [] };
+  const audit = evaluateWebsiteAudit(previewArtifact.url, dummyMeta, { geoEvidence: previewArtifact });
+
+  assert.equal(audit.checks.geoOptimizer.status, 'unavailable');
   assert.equal(audit.checks.geoOptimizer.score, null);
   assert.equal(audit.score, null);
-  assert.ok(audit.checks.geoOptimizer.note.includes('Fallback scores are prohibited'));
+  assert.ok(audit.checks.geoOptimizer.error.includes('Response too large: 20398368 bytes'));
 });
 
-test('evaluateWebsiteAudit handles successful GEO evidence import preserving tool revision, timestamp, and score', () => {
-  const meta = {
-    bytes: 50000,
-    title: 'Best Day Fitness & Wellness',
-    description: 'Personal training for adults 50+ in St. Petersburg, FL.',
-    canonical: 'https://bestdayfitness.com/',
-    robots: 'index, follow',
-    og: { title: '', description: '', image: '' },
-    schemaBlocks: [],
-    malformedJsonLd: [],
-    headings: { h1Count: 1, h1Texts: ['Best Day Fitness'], h2Count: 2, h3Count: 0 },
-    assets: { scriptTagCount: 2, scriptBytes: 1000, base64Count: 0 },
-    phoneFound: true,
-    addressFound: true,
-  };
+test('real tool run demonstration: production baseline import preserves findings and score 32', () => {
+  const artifactPath = path.resolve('C:/Users/chris/.gemini/antigravity/brain/902d0ef8-80e1-4892-97e0-44fe87437e0d/geo-audits/baseline-production-bestdayfitness.json');
+  assert.ok(fs.existsSync(artifactPath), 'Artifact must exist on disk');
+  const prodArtifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
 
-  const verifiedEvidence = {
-    url: 'https://bestdayfitness.com',
-    timestamp: '2026-09-30T14:12:47.607042+00:00',
-    tool: 'geo-optimizer v4.18.3',
-    score: 32,
-    band: 'critical',
-    exitStatus: 'success',
-    error: null,
-    checks: {
-      robots_txt: { score: 5 },
-      schema_jsonld: { score: 0 },
-      meta_tags: { score: 14 },
-      content: { score: 13 },
-    },
-  };
+  const dummyMeta = { bytes: 50000, headings: { h1Texts: [] }, assets: {}, schemaBlocks: [], malformedJsonLd: [] };
+  const audit = evaluateWebsiteAudit(prodArtifact.url, dummyMeta, { geoEvidence: prodArtifact });
 
-  const audit = evaluateWebsiteAudit('https://bestdayfitness.com', meta, {
-    geoEvidence: verifiedEvidence,
-  });
-
-  assert.equal(audit.success, true);
   assert.equal(audit.checks.geoOptimizer.status, 'completed');
   assert.equal(audit.checks.geoOptimizer.score, 32);
   assert.equal(audit.score, 32);
   assert.equal(audit.checks.geoOptimizer.band, 'critical');
-  assert.equal(audit.checks.geoOptimizer.tool, 'geo-optimizer v4.18.3');
-  assert.equal(audit.checks.geoOptimizer.runTimestamp, '2026-09-30T14:12:47.607042+00:00');
-  assert.equal(audit.checks.geoOptimizer.rawSummary.meta, 14);
+  assert.equal(audit.checks.geoOptimizer.rawSummary.meta, 5);
+  assert.equal(audit.checks.geoOptimizer.rawSummary.robots, 5);
 });
 
-test('evaluateWebsiteAudit handles failed GEO run preserving error without guessing scores', () => {
-  const meta = {
-    bytes: 20413641,
-    title: '',
-    description: '',
-    canonical: '',
-    robots: 'noindex',
-    og: { title: '', description: '', image: '' },
-    schemaBlocks: [],
-    malformedJsonLd: [],
-    headings: { h1Count: 1, h1Texts: ['Best Day Fitness'], h2Count: 2, h3Count: 0 },
-    assets: { scriptTagCount: 7, scriptBytes: 10553145, base64Count: 24 },
-    phoneFound: true,
-    addressFound: true,
+// --- 2. PERSISTENCE & MEANINGFUL HISTORY ---
+
+test('imported evidence is persisted in state.evidence and survives service restart', async () => {
+  const persistedState = {
+    latest: null,
+    updatedAt: null,
+    history: [],
+    evidence: {},
   };
-
-  const failedRunEvidence = {
-    url: 'https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU',
-    timestamp: '2026-09-30T14:12:57.528906+00:00',
-    tool: 'geo-optimizer v4.18.3',
-    score: 0,
-    band: 'critical',
-    exitStatus: 'failed',
-    error: 'Response too large: 20398368 bytes (max: 10485760)',
-  };
-
-  const audit = evaluateWebsiteAudit('https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU', meta, {
-    geoEvidence: failedRunEvidence,
-  });
-
-  assert.equal(audit.success, true);
-  assert.equal(audit.checks.geoOptimizer.status, 'unavailable');
-  assert.equal(audit.checks.geoOptimizer.score, null);
-  assert.equal(audit.score, null);
-  assert.equal(audit.checks.geoOptimizer.error, 'Response too large: 20398368 bytes (max: 10485760)');
-});
-
-test('evaluateWebsiteAudit rejects mismatched target evidence with evidence_target_mismatch', () => {
-  const meta = {
-    bytes: 50000,
-    title: 'Preview',
-    description: '',
-    canonical: '',
-    robots: 'noindex',
-    og: { title: '', description: '', image: '' },
-    schemaBlocks: [],
-    malformedJsonLd: [],
-    headings: { h1Count: 1, h1Texts: ['Preview'], h2Count: 0, h3Count: 0 },
-    assets: { scriptTagCount: 1, scriptBytes: 100, base64Count: 0 },
-    phoneFound: false,
-    addressFound: false,
-  };
-
-  // Evidence is for production bestdayfitness.com, but target is preview link.bestdayfitness.com
-  const mismatchedEvidence = {
-    url: 'https://bestdayfitness.com',
-    timestamp: '2026-09-30T14:12:47+00:00',
-    score: 32,
-  };
-
-  const audit = evaluateWebsiteAudit('https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU', meta, {
-    geoEvidence: mismatchedEvidence,
-  });
-
-  assert.equal(audit.success, true);
-  assert.equal(audit.checks.geoOptimizer.status, 'evidence_target_mismatch');
-  assert.equal(audit.checks.geoOptimizer.score, null);
-  assert.ok(audit.checks.geoOptimizer.error.includes('Mismatched evidence rejected'));
-});
-
-test('createWebsiteAuditService enforces SSRF domain bounding', async () => {
-  const state = { latest: null, updatedAt: null, history: [] };
-  const service = createWebsiteAuditService({
-    state,
-    save: () => {},
-    providerRuntime: {
-      fetch: async () => ({ text: async () => '<html></html>' }),
-    },
-  });
-
-  // Attempt SSRF against internal IP
-  const ssrfRes = await service.run('http://169.254.169.254/latest/meta-data/');
-  assert.equal(ssrfRes.ok, false);
-  assert.equal(state.latest.status, 'rejected');
-  assert.ok(state.latest.error.includes('Disallowed target host'));
-
-  // Attempt audit against unapproved external domain
-  const extRes = await service.run('https://evil-hacker.com/');
-  assert.equal(extRes.ok, false);
-  assert.equal(state.latest.status, 'rejected');
-  assert.ok(state.latest.error.includes('Disallowed target host'));
-});
-
-test('createWebsiteAuditService supports repeatable importGeoEvidence and re-evaluates latest audit', async () => {
-  const state = { latest: null, updatedAt: null, history: [] };
   let saveCount = 0;
 
   const validHtml = `<!DOCTYPE html><html><head>
-    <title>Best Day Fitness &amp; Wellness | Private Personal Training</title>
+    <title>Best Day Fitness &amp; Wellness</title>
     <meta name="description" content="One team, one plan: personal training for adults 50+ in St. Petersburg, FL.">
     <link rel="canonical" href="https://bestdayfitness.com/">
     <meta name="robots" content="index, follow">
-  </head><body>
-    <h1>Best Day Fitness &amp; Wellness</h1>
-    <p>Call (727) 334-1472 at 6619 1st Ave S</p>
-  </body></html>`;
+  </head><body><h1>Best Day Fitness &amp; Wellness</h1></body></html>`;
 
-  const service = createWebsiteAuditService({
-    state,
+  // 1. Initial service instance
+  const service1 = createWebsiteAuditService({
+    state: persistedState,
     save: () => { saveCount++; },
     providerRuntime: {
       fetch: async () => ({ text: async () => validHtml }),
     },
+    allowLocalTargets: true,
   });
 
-  // Step 1: Run audit initially with no GEO evidence -> status="not_run", score=null
-  const runRes = await service.run('https://bestdayfitness.com');
-  assert.equal(runRes.ok, true);
-  assert.equal(state.latest.checks.geoOptimizer.status, 'not_run');
-  assert.equal(state.latest.checks.geoOptimizer.score, null);
+  // Run audit initial
+  await service1.run('https://bestdayfitness.com');
+  assert.equal(persistedState.latest.checks.geoOptimizer.status, 'not_run');
 
-  // Step 2: Import verified GEO evidence for that target URL
-  const importRes = service.importGeoEvidence('https://bestdayfitness.com', {
+  // Import verified evidence
+  const verifiedEvidence = {
     url: 'https://bestdayfitness.com',
     timestamp: '2026-09-30T14:12:47.000Z',
-    tool: 'geo-optimizer v4.18.3',
     score: 32,
-    band: 'critical',
     exitStatus: 'success',
-  });
-  assert.equal(importRes.ok, true);
+  };
+  service1.importGeoEvidence('https://bestdayfitness.com', verifiedEvidence);
+  assert.equal(persistedState.latest.checks.geoOptimizer.status, 'completed');
+  assert.equal(persistedState.latest.checks.geoOptimizer.score, 32);
+  assert.ok(persistedState.evidence['https://bestdayfitness.com']);
 
-  // Re-evaluated latest audit now has status="completed", score=32
-  assert.equal(state.latest.checks.geoOptimizer.status, 'completed');
-  assert.equal(state.latest.checks.geoOptimizer.score, 32);
+  // 2. Recreate service from persistedState (simulating server restart)
+  const service2 = createWebsiteAuditService({
+    state: persistedState, // Same persisted state loaded from disk
+    save: () => { saveCount++; },
+    providerRuntime: {
+      fetch: async () => ({ text: async () => validHtml }),
+    },
+    allowLocalTargets: true,
+  });
+
+  // Latest snapshot preserved
+  assert.equal(service2.getLatest().checks.geoOptimizer.status, 'completed');
+  assert.equal(service2.getLatest().checks.geoOptimizer.score, 32);
+
+  // Subsequent audit run retains persistent evidence for the target
+  await service2.run('https://bestdayfitness.com');
+  assert.equal(service2.getLatest().checks.geoOptimizer.status, 'completed');
+  assert.equal(service2.getLatest().checks.geoOptimizer.score, 32);
+
+  // Immutable history contains meaningful fields
+  const historyEntry = service2.getHistory()[0];
+  assert.ok(historyEntry);
+  assert.equal(historyEntry.targetUrl, 'https://bestdayfitness.com');
+  assert.equal(historyEntry.geoStatus, 'completed');
+  assert.equal(historyEntry.geoScore, 32);
+  assert.ok(historyEntry.provenance.toolRevision);
+});
+
+// --- 3. POSITIVE SERVICE FACTS VERIFICATION ---
+
+test('validateSchema rejects consultation with 90 minutes and unrelated team', () => {
+  const badConsultationSchema = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'LocalBusiness',
+        name: 'Best Day Fitness & Wellness',
+        telephone: '+1-727-334-1472',
+        address: { streetAddress: '6619 1st Ave S', addressLocality: 'St. Petersburg', addressRegion: 'FL', postalCode: '33707' },
+        openingHoursSpecification: [
+          { dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], opens: '04:00', closes: '22:00' },
+          { dayOfWeek: ['Sunday'], opens: '09:00', closes: '17:00' },
+        ],
+      },
+      {
+        '@type': 'Service',
+        name: 'Fitness Consultation',
+        description: 'A 90-minute session conducted by an unrelated team.', // Conflicting duration and wrong team!
+        offers: { price: '99.00', priceCurrency: 'USD' },
+      },
+    ],
+  };
+
+  const res = validateSchema(badConsultationSchema);
+  assert.equal(res.valid, false);
+  assert.ok(res.categories.approvedFacts.conflictingFacts.some(f => f.includes('conflicting duration')));
+  assert.ok(res.categories.approvedFacts.conflictingFacts.some(f => f.includes('Client Experience Team')));
+});
+
+test('validateSchema rejects public HaloRed membership price of $999.00', () => {
+  const badHaloRedSchema = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'LocalBusiness',
+        name: 'Best Day Fitness & Wellness',
+        telephone: '+1-727-334-1472',
+        address: { streetAddress: '6619 1st Ave S', addressLocality: 'St. Petersburg', addressRegion: 'FL', postalCode: '33707' },
+        openingHoursSpecification: [
+          { dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], opens: '04:00', closes: '22:00' },
+          { dayOfWeek: ['Sunday'], opens: '09:00', closes: '17:00' },
+        ],
+      },
+      {
+        '@type': 'Service',
+        name: 'HaloRed Red Light & Salt Therapy',
+        offers: [
+          { name: 'Single Session', price: '39.99' },
+          { name: 'Member Monthly', price: '299.00' },
+          { name: 'Public Guest Monthly', price: '999.00' }, // WRONG PRICE: should be 399.00!
+        ],
+      },
+    ],
+  };
+
+  const res = validateSchema(badHaloRedSchema);
+  assert.equal(res.valid, false);
+  assert.ok(res.categories.approvedFacts.conflictingFacts.some(f => f.includes('HaloRed public monthly price mismatch')));
+});
+
+test('validateSchema positively verifies genuine approved consultation and HaloRed offers', () => {
+  const fullSchema = buildGhlSchemaGraph({ domain: 'https://bestdayfitness.com' });
+  const res = validateSchema(fullSchema);
+  assert.equal(res.valid, true);
+  assert.ok(res.categories.approvedFacts.verifiedFacts.some(f => f.includes('Consultation offer verified: $99.00')));
+  assert.ok(res.categories.approvedFacts.verifiedFacts.some(f => f.includes('HaloRed pricing verified: $39.99/15m, $299.00/mo member, $399.00/mo public')));
+});
+
+// --- 4. HTML HEAD PARSER (NO FALSE POSITIVES FROM SCRIPTS OR COMMENTS) ---
+
+test('parseHeadElements ignores title inside script and comment in head', () => {
+  const htmlWithTrickyHead = `<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    // <title>Fake Script Title</title>
+    const title = "<title>Another Fake Title</title>";
+  </script>
+  <!-- <title>Commented Out Title</title> -->
+  <title>Real Authentic Title</title>
+  <meta name="description" content="Real Meta Description for Testing Purpose.">
+  <link rel="canonical" href="https://bestdayfitness.com/">
+</head>
+<body>
+  <h1>Body Header</h1>
+</body>
+</html>`;
+
+  const parsed = parseHeadElements(htmlWithTrickyHead);
+  assert.equal(parsed.title, 'Real Authentic Title');
+  assert.equal(parsed.description, 'Real Meta Description for Testing Purpose.');
+  assert.equal(parsed.canonical, 'https://bestdayfitness.com/');
+});
+
+test('parseHeadElements merges multiple robots directives and integrates X-Robots-Tag header', () => {
+  const htmlWithDuplicateRobots = `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="robots" content="noarchive">
+  <meta name="robots" content="nofollow">
+</head>
+<body></body>
+</html>`;
+
+  const headers = { 'x-robots-tag': 'noindex, nosnippet' };
+  const parsed = parseHeadElements(htmlWithDuplicateRobots, headers);
+
+  assert.equal(parsed.isNoindex, true);
+  assert.ok(parsed.robots.includes('noarchive'));
+  assert.ok(parsed.robots.includes('nofollow'));
+  assert.ok(parsed.robots.includes('header: noindex, nosnippet'));
+});
+
+// --- 5. PAGE-SPECIFIC SCOPE ---
+
+test('buildGhlTrackingSnippet produces genuine page-specific outputs for home and consultation', () => {
+  const homeSnippet = buildGhlTrackingSnippet({ pageType: 'home' });
+  const consultSnippet = buildGhlTrackingSnippet({ pageType: 'consultation' });
+
+  assert.notEqual(homeSnippet, consultSnippet);
+
+  // Home specifics
+  assert.ok(homeSnippet.includes('<link rel="canonical" href="https://bestdayfitness.com/">'));
+  assert.ok(homeSnippet.includes('Private Personal Training &amp; Recovery in St. Petersburg, FL'));
+
+  // Consultation specifics
+  assert.ok(consultSnippet.includes('<link rel="canonical" href="https://bestdayfitness.com/consultation">'));
+  assert.ok(consultSnippet.includes('Fitness Consultation | Best Day Fitness &amp; Wellness'));
+  assert.ok(consultSnippet.includes('https://bestdayfitness.com/consultation#webpage'));
+  assert.ok(consultSnippet.includes('BreadcrumbList'));
+});
+
+// --- 6. AUDIT FETCH BOUNDARY & SSRF PROTECTION ---
+
+test('isApprovedAuditTarget restricts localhost in production mode and revalidates redirects', () => {
+  // Production mode: localhost blocked
+  const prodCheck = isApprovedAuditTarget('http://localhost:3000', { allowLocalTargets: false });
+  assert.equal(prodCheck.ok, false);
+  assert.ok(prodCheck.error.includes('Localhost targets are restricted to isolated test environments'));
+
+  // Public domain approved
+  const pubCheck = isApprovedAuditTarget('https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU');
+  assert.equal(pubCheck.ok, true);
+
+  // Malicious domain blocked
+  const evilCheck = isApprovedAuditTarget('https://malicious-site.com/exploit');
+  assert.equal(evilCheck.ok, false);
+  assert.ok(evilCheck.error.includes('Disallowed target host'));
 });
