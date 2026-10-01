@@ -359,5 +359,32 @@ test('regression: "Non-members $299 monthly public rate" must be flagged as inco
   assert.equal(result.publishable, false);
 });
 
+test('regression: heading and price in same card (<article><h3>Public Rate</h3><div>$199 / month</div></article>) must flag violation', () => {
+  const html = '<article><h3>Public Rate</h3><div>$199 / month</div></article>';
+  const result = assessPageQuality(html, { pageType: 'halored' });
+
+  assert.ok(
+    result.claimsViolations.includes('incorrect public recovery plan pricing ($399 approved)'),
+    `Expected violation for heading + price in card, got: ${result.claimsViolations.join(', ')}`
+  );
+  assert.equal(result.publishable, false);
+});
+
+test('regression: multiple matches with negated first disclaimer and unapproved second offer must evaluate all matches and flag violation', () => {
+  const html = '<p>We do not offer public monthly plan $199.</p><p>Public monthly plan $249.</p>';
+  const result = assessPageQuality(html, { pageType: 'halored' });
+
+  assert.ok(
+    result.claimsViolations.includes('incorrect public recovery plan pricing ($399 approved)'),
+    `Expected violation for later offer $249, got: ${result.claimsViolations.join(', ')}`
+  );
+  assert.ok(
+    result.flaggedForReview.some(f => f.context.includes('$199')),
+    'Negated first match $199 must be recorded in flaggedForReview'
+  );
+  assert.equal(result.publishable, false);
+});
+
+
 
 
