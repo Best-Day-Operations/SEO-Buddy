@@ -1,0 +1,540 @@
+{
+  "url": "http://127.0.0.1:8877/about.html",
+  "timestamp": "2026-09-30T16:58:46.585916+00:00",
+  "score": 33,
+  "band": "critical",
+  "error": null,
+  "checks": {
+    "robots_txt": {
+      "score": 0,
+      "max": 18,
+      "passed": false,
+      "details": {
+        "found": false,
+        "bots_allowed": [],
+        "bots_missing": [],
+        "bots_blocked": [],
+        "bots_partial": [],
+        "citation_bots_ok": false,
+        "crawl_delay": null,
+        "citation_bots_explicit": false
+      }
+    },
+    "llms_txt": {
+      "score": 0,
+      "max": 18,
+      "passed": false,
+      "details": {
+        "found": false,
+        "has_h1": false,
+        "has_description": false,
+        "has_sections": false,
+        "has_links": false,
+        "word_count": 0,
+        "has_full": false,
+        "sections_count": 0,
+        "links_count": 0,
+        "has_blockquote": false,
+        "has_optional_section": false,
+        "companion_files_hint": false,
+        "validation_warnings": [],
+        "blocked_by_cdn": false
+      }
+    },
+    "schema_jsonld": {
+      "score": 5,
+      "max": 16,
+      "passed": false,
+      "details": {
+        "has_website": false,
+        "has_webapp": false,
+        "has_faq": false,
+        "found_types": [
+          "HealthClub"
+        ]
+      }
+    },
+    "meta_tags": {
+      "score": 14,
+      "max": 14,
+      "passed": true,
+      "details": {
+        "has_title": true,
+        "has_description": true,
+        "has_canonical": true,
+        "has_og_title": true,
+        "has_og_description": true,
+        "has_og_image": true,
+        "title_text": "About Best Day Fitness & Wellness | St. Petersburg, FL",
+        "description_text": "A calm, barefoot, appointment-only studio in St. Petersburg where trainers, a physical therapist, massage and coaching share one plan for adults 50+.",
+        "description_length": 149,
+        "title_length": 54,
+        "canonical_url": "https://bestdayfitness.com/about",
+        "x_robots_noindex": false,
+        "x_robots_tag": "",
+        "has_noai": false,
+        "noai_value": ""
+      }
+    },
+    "content": {
+      "score": 12,
+      "max": 12,
+      "passed": true,
+      "details": {
+        "has_h1": true,
+        "heading_count": 9,
+        "has_numbers": true,
+        "has_links": true,
+        "word_count": 511,
+        "h1_text": "The life you want to keep living is the reason we're here.",
+        "numbers_count": 21,
+        "external_links_count": 2,
+        "has_heading_hierarchy": true,
+        "has_lists_or_tables": true,
+        "has_front_loading": true
+      }
+    },
+    "signals": {
+      "score": 3,
+      "max": 6,
+      "passed": true,
+      "details": {
+        "has_lang": true,
+        "lang_value": "en",
+        "has_rss": false,
+        "rss_url": "",
+        "has_freshness": false,
+        "freshness_date": ""
+      }
+    },
+    "ai_discovery": {
+      "score": 0,
+      "max": 6,
+      "passed": false,
+      "details": {
+        "has_well_known_ai": false,
+        "has_summary": false,
+        "has_faq": false,
+        "has_service": false,
+        "summary_valid": false,
+        "faq_count": 0,
+        "endpoints_found": 0,
+        "has_webmcp_declaration": false,
+        "webmcp_declared_tool_count": 0
+      }
+    },
+    "brand_entity": {
+      "score": 2,
+      "max": 10,
+      "passed": true,
+      "details": {
+        "brand_name_consistent": true,
+        "names_found": [
+          "The life you want to keep living is the reason we're here.",
+          "About Best Day Fitness & Wellness",
+          "About Best Day Fitness & Wellness"
+        ],
+        "primary_name": "About Best Day Fitness & Wellness",
+        "schema_desc_matches_meta": false,
+        "kg_pillar_count": 0,
+        "kg_pillar_urls": [],
+        "has_wikipedia": false,
+        "has_wikidata": false,
+        "has_linkedin": false,
+        "has_crunchbase": false,
+        "has_about_link": false,
+        "has_contact_info": false,
+        "has_geo_schema": false,
+        "has_hreflang": false,
+        "hreflang_count": 0,
+        "faq_depth": 0,
+        "has_recent_articles": false
+      }
+    }
+  },
+  "score_breakdown": {
+    "robots": 0,
+    "llms": 0,
+    "schema": 5,
+    "meta": 14,
+    "content": 12,
+    "signals": 3,
+    "ai_discovery": 0,
+    "brand_entity": 2,
+    "negative_penalty": -3
+  },
+  "recommendations": [
+    "Create robots.txt with Allow rules for AI bots (GPTBot, ClaudeBot, PerplexityBot)",
+    "Create /llms.txt for AI indexing: geo llms --base-url http://127.0.0.1:8877/about.html. Note: llms.txt is an organizational signal, not a proven ranking factor. It helps structure content for AI systems.",
+    "Add WebSite JSON-LD schema to homepage",
+    "Add Organization JSON-LD schema with name, url, and logo",
+    "Add FAQPage schema with site FAQs",
+    "Add sameAs links in Organization schema to Wikipedia, Wikidata, LinkedIn, or Crunchbase for Knowledge Graph disambiguation",
+    "Add a visible /about or /chi-siamo link to build trust signals for AI",
+    "Add address, telephone or contactPoint to Organization schema for entity validation",
+    "Create /.well-known/ai.txt to define AI crawler permissions",
+    "Create /ai/summary.json with site name and description for AI engines",
+    "Create /ai/faq.json with structured FAQ for AI search visibility",
+    "Create /ai/service.json to describe service capabilities for AI",
+    "Add RSS/Atom feed and link it in <head> with <link rel=\"alternate\" type=\"application/rss+xml\"> for AI discovery",
+    "Add potentialAction (SearchAction) to WebSite schema for AI agent discoverability",
+    "Add descriptive labels to forms (label, aria-label) to make them usable by AI agents",
+    "Consider adding WebMCP toolname/tooldescription attributes to interactive elements for Chrome AI agent support"
+  ],
+  "webmcp": {
+    "readiness_level": "none",
+    "agent_ready": false,
+    "has_register_tool": false,
+    "has_tool_attributes": false,
+    "tool_count": 0,
+    "has_potential_action": false,
+    "potential_actions": [],
+    "has_labeled_forms": false,
+    "labeled_forms_count": 0,
+    "has_openapi": false,
+    "has_webmcp_declaration": false,
+    "declared_tool_count": 0
+  },
+  "negative_signals": {
+    "severity": "medium",
+    "signals_found": 2,
+    "cta_density_high": false,
+    "cta_count": 0,
+    "has_popup_signals": true,
+    "is_thin_content": false,
+    "broken_links_count": 0,
+    "has_keyword_stuffing": false,
+    "has_author_signal": false,
+    "boilerplate_ratio": 0.46,
+    "has_mixed_signals": false
+  },
+  "cdn_check": {
+    "checked": true,
+    "browser_status": 200,
+    "browser_content_length": 19517,
+    "bot_results": [
+      {
+        "bot": "GPTBot",
+        "status": 200,
+        "content_length": 19517,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "OAI-SearchBot",
+        "status": 200,
+        "content_length": 19517,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "PerplexityBot",
+        "status": 200,
+        "content_length": 19517,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Claude-SearchBot",
+        "status": 200,
+        "content_length": 19517,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Googlebot",
+        "status": 200,
+        "content_length": 19517,
+        "blocked": false,
+        "challenge_detected": false
+      },
+      {
+        "bot": "Applebot",
+        "status": 200,
+        "content_length": 19517,
+        "blocked": false,
+        "challenge_detected": false
+      }
+    ],
+    "any_blocked": false,
+    "cdn_detected": "",
+    "cdn_headers": {
+      "server": "SimpleHTTP/0.6 Python/3.11.9"
+    },
+    "error": ""
+  },
+  "js_rendering": {
+    "checked": true,
+    "raw_word_count": 501,
+    "raw_heading_count": 9,
+    "has_empty_root": false,
+    "has_noscript_content": false,
+    "framework_detected": "",
+    "js_dependent": false,
+    "details": "501 words and 9 headings found in raw HTML. Content is accessible without JavaScript."
+  },
+  "multimodal": {
+    "checked": true,
+    "total_images": 4,
+    "images_with_alt": 4,
+    "alt_coverage": 1.0,
+    "caption_count": 0,
+    "has_video": false,
+    "video_count": 0,
+    "has_video_schema": false,
+    "has_video_captions": false,
+    "has_audio": false,
+    "has_audio_schema": false,
+    "has_transcript": false,
+    "readiness_level": "good"
+  },
+  "trust_stack": {
+    "checked": true,
+    "technical": {
+      "name": "technical",
+      "label": "Technical Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [
+        "HTTPS not enabled",
+        "Strict-Transport-Security header missing",
+        "Content-Security-Policy header missing",
+        "X-Frame-Options header missing"
+      ],
+      "details": {}
+    },
+    "identity": {
+      "name": "identity",
+      "label": "Identity Trust",
+      "score": 1,
+      "max_score": 5,
+      "signals_found": [
+        "Brand name consistent"
+      ],
+      "signals_missing": [
+        "No about page link found",
+        "No contact information in schema",
+        "No Organization JSON-LD schema",
+        "No author attribution found"
+      ],
+      "details": {}
+    },
+    "social": {
+      "name": "social",
+      "label": "Social Trust",
+      "score": 0,
+      "max_score": 5,
+      "signals_found": [],
+      "signals_missing": [
+        "No sameAs links in schema",
+        "No Knowledge Graph pillar links",
+        "No reviews or testimonials found",
+        "No social media profile links"
+      ],
+      "details": {}
+    },
+    "academic": {
+      "name": "academic",
+      "label": "Academic Trust",
+      "score": 2,
+      "max_score": 5,
+      "signals_found": [
+        "Numbers cited (21)",
+        "External sources (2 non-social links)"
+      ],
+      "signals_missing": [
+        "No links to authoritative sources (DOI, PubMed, Scholar)",
+        "No References/Sources section",
+        "No original research data patterns"
+      ],
+      "details": {
+        "authoritative_domains": [],
+        "statistics_count": 0,
+        "numbers_count": 21
+      }
+    },
+    "consistency": {
+      "name": "consistency",
+      "label": "Consistency Trust",
+      "score": 3,
+      "max_score": 5,
+      "signals_found": [
+        "Brand name consistent across title/H1/schema",
+        "No mixed signals"
+      ],
+      "signals_missing": [
+        "Schema description differs from meta description",
+        "No dateModified in schema"
+      ],
+      "details": {}
+    },
+    "composite_score": 6,
+    "grade": "D",
+    "trust_level": "low"
+  },
+  "prompt_injection": {
+    "checked": true,
+    "hidden_text_found": false,
+    "hidden_text_count": 0,
+    "hidden_text_samples": [],
+    "invisible_unicode_found": false,
+    "invisible_unicode_count": 0,
+    "llm_instruction_found": false,
+    "llm_instruction_count": 0,
+    "llm_instruction_samples": [],
+    "html_comment_injection_found": false,
+    "html_comment_injection_count": 0,
+    "html_comment_samples": [],
+    "monochrome_text_found": false,
+    "monochrome_text_count": 0,
+    "microfont_found": false,
+    "microfont_count": 0,
+    "data_attr_injection_found": false,
+    "data_attr_injection_count": 0,
+    "data_attr_samples": [],
+    "aria_hidden_injection_found": false,
+    "aria_hidden_injection_count": 0,
+    "aria_hidden_samples": [],
+    "ugc_surface_found": false,
+    "ugc_surface_samples": [],
+    "ugc_injection_risk": false,
+    "patterns_found": 0,
+    "severity": "clean",
+    "risk_level": "none"
+  },
+  "rag_chunk": {
+    "checked": true,
+    "total_sections": 9,
+    "sections_in_range": 0,
+    "avg_section_words": 40.2,
+    "has_definition_opening": false,
+    "heading_as_boundary_ratio": 1.0,
+    "anchor_sentences": 16,
+    "chunk_readiness_score": 45
+  },
+  "embedding_proximity": {
+    "checked": true,
+    "skipped_reason": "sentence-transformers not installed (pip install geo-optimizer-skill[embedding])",
+    "model_name": "",
+    "query_scores": [],
+    "avg_similarity": 0.0,
+    "top_similarity": 0.0,
+    "retrievable_chunks": 0,
+    "total_chunks": 0
+  },
+  "content_decay": {
+    "checked": true,
+    "signals": [
+      {
+        "decay_type": "temporal",
+        "text": "nce Get Directions \u2192 \u00a9 2010\u00e2\u0080\u00932026 Best Day Fitness & Wellness.",
+        "estimated_stale_days": 365,
+        "suggestion": "Use relative time or add dateModified schema for freshness signals"
+      },
+      {
+        "decay_type": "price",
+        "text": "ook a Consultation ($99) Meet the Team \u2192 Ho",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "ook a Consultation ($99) Call (727) 334-147",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      },
+      {
+        "decay_type": "price",
+        "text": "m The Consultation ($99) Client Stories How",
+        "estimated_stale_days": 180,
+        "suggestion": "Add 'pricing as of [date]' or link to live pricing page"
+      }
+    ],
+    "earliest_decay_days": 180,
+    "decay_risk": "medium",
+    "evergreen_score": 83
+  },
+  "platform_citation": {
+    "checked": true,
+    "platforms": [
+      {
+        "platform": "chatgpt",
+        "score": 18,
+        "strengths": [
+          "Well-structured content"
+        ],
+        "recommendations": [
+          "Allow GPTBot in robots.txt",
+          "Add /llms.txt for LLM-friendly site summary",
+          "Add FAQPage schema for Q&A-style answers",
+          "Add Organization schema for entity clarity"
+        ]
+      },
+      {
+        "platform": "perplexity",
+        "score": 10,
+        "strengths": [
+          "Substantial content depth"
+        ],
+        "recommendations": [
+          "Allow PerplexityBot in robots.txt",
+          "Add /llms.txt with links to key resources",
+          "Add dateModified schema or freshness indicators",
+          "Add external links to authoritative sources"
+        ]
+      },
+      {
+        "platform": "google_ai",
+        "score": 59,
+        "strengths": [
+          "Complete meta tags",
+          "Open Graph tags present",
+          "Quality content structure",
+          "Content available without JS (SSR-safe)",
+          "Descriptive image alt text"
+        ],
+        "recommendations": [
+          "Allow Google-Extended in robots.txt",
+          "Add more schema types for richer structured data",
+          "Add dateModified / lastmod freshness signals",
+          "Add sameAs links to social profiles and Wikipedia"
+        ]
+      }
+    ]
+  },
+  "context_window": {
+    "checked": true,
+    "total_words": 501,
+    "total_tokens_estimate": 651,
+    "front_loaded_ratio": 0.4,
+    "key_info_tokens": 390,
+    "filler_ratio": 0.04,
+    "optimal_for": [
+      "perplexity",
+      "chatgpt",
+      "claude"
+    ],
+    "truncation_risk": "low",
+    "context_efficiency_score": 70
+  },
+  "instruction_readiness": {
+    "checked": true,
+    "labeled_buttons": 13,
+    "unlabeled_buttons": 0,
+    "action_clarity_score": 100,
+    "total_inputs": 0,
+    "labeled_inputs": 0,
+    "typed_inputs": 0,
+    "form_readability_score": 100,
+    "nav_links": 52,
+    "stateful_urls": true,
+    "has_aria_live": false,
+    "has_error_roles": false,
+    "readiness_score": 75,
+    "readiness_level": "ready"
+  },
+  "http_status": 200,
+  "page_size": 19517,
+  "audit_duration_ms": 351
+}

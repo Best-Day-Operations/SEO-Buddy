@@ -647,6 +647,16 @@
             <span class="av-updated" id="av-updated"></span>
             <label class="av-auto" title="Automatically re-run once a week so your trend fills in on its own"><span class="av-switch"><input type="checkbox" id="av-auto"><span class="av-slider"></span></span><span>Auto weekly</span></label>
             <button class="av-linkbtn" id="av-edit-prompts" type="button">Edit prompts</button>
+            <select id="av-service-filter" class="form-input" aria-label="Filter AI visibility by service category" style="width:auto;display:inline-block;padding:2px 8px;font-size:12px;margin-right:6px;height:28px;">
+              <option value="all">All Service Categories</option>
+              <option value="personalTraining">Personal Training</option>
+              <option value="consultation">Consultation ($99 / 45-min)</option>
+              <option value="haloredRecovery">HaloRed Recovery ($39.99)</option>
+              <option value="longevity">Longevity &amp; Mobility</option>
+              <option value="olderAdultFitness">Older Adult Fitness (50+)</option>
+              <option value="wellnessCoaching">Wellness Coaching</option>
+              <option value="physicalTherapy">Physical Therapy Integration</option>
+            </select>
             <button class="btn btn-primary btn-xs" id="av-run" type="button">&#8635; Run AI visibility check</button>
           </div>
         </div>
@@ -657,11 +667,24 @@
         </div>
 
         <div class="av-prompts" id="av-prompts-panel" style="display:none;">
-          <h4>Tracked search prompts</h4>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <h4 style="margin:0;">Tracked search prompts</h4>
+            <span class="text-muted" style="font-size:11px;" id="av-promptset-version">Prompt Set v2026-09-30</span>
+          </div>
+          <div class="av-service-presets" style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <span style="font-size:12px;font-weight:600;">Load approved presets:</span>
+            <button class="btn btn-secondary btn-xs av-preset-btn" type="button" data-cat="all">+ All Services</button>
+            <button class="btn btn-secondary btn-xs av-preset-btn" type="button" data-cat="personalTraining">+ Personal Training</button>
+            <button class="btn btn-secondary btn-xs av-preset-btn" type="button" data-cat="consultation">+ Consultation</button>
+            <button class="btn btn-secondary btn-xs av-preset-btn" type="button" data-cat="haloredRecovery">+ HaloRed Recovery</button>
+            <button class="btn btn-secondary btn-xs av-preset-btn" type="button" data-cat="longevity">+ Longevity</button>
+            <button class="btn btn-secondary btn-xs av-preset-btn" type="button" data-cat="olderAdultFitness">+ Older Adults (50+)</button>
+          </div>
           <p class="text-muted" style="font-size:12.5px;margin:0 0 10px;">One search per line &mdash; these are the questions run across every engine. Up to 25.</p>
           <textarea id="av-prompts-text" class="form-input" placeholder="best senior fitness in St. Petersburg FL&#10;personal trainer for adults over 50 St. Petersburg"></textarea>
           <div class="av-prompts-actions">
-            <button class="btn btn-secondary btn-xs" id="av-prompts-save" type="button">Save prompts</button>
+            <button class="btn btn-primary btn-xs" id="av-prompts-save" type="button">Save prompts</button>
+            <button class="btn btn-secondary btn-xs" id="av-prompts-merge" type="button" title="Append these without removing current prompts">Merge &amp; preserve existing</button>
             <button class="btn btn-secondary btn-xs" id="av-prompts-cancel" type="button">Cancel</button>
           </div>
         </div>
@@ -1060,6 +1083,62 @@
           <div class="oa-actions">
             <button class="btn btn-primary" id="oa-run" type="button">Run now</button>
             <span class="text-muted" style="font-size:var(--font-xs);" id="oa-run-note"></span>
+          </div>
+        </div>
+
+        <!-- Section: Website Audit & GHL Schema Engine -->
+        <div class="tool-group" id="oa-website-audit-group" data-ws-section="Website Audit & Schema"><b>Website Audit &amp; Schema</b><span>inspect live GHL preview &amp; generate validated schema</span><i></i></div>
+
+        <div class="content-card" id="website-audit-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <h2 style="margin:0;">Website &amp; AEO Audit</h2>
+                <span class="badge" style="background:rgba(59,130,246,0.15);color:var(--color-primary);font-size:0.75rem;padding:2px 8px;border-radius:4px;font-weight:600;">Locally Implemented &amp; Tested</span>
+              </div>
+              <p class="text-muted" style="margin:4px 0 0;">Inspects the hosted GoHighLevel preview and production website for crawlability, strict head metadata, schema presence, and asset bloat with truthful GEO Optimizer reporting.</p>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px;">
+            <div style="flex:1;min-width:280px;">
+              <label for="audit-target-url" style="font-size:var(--font-xs);font-weight:600;display:block;margin-bottom:4px;">Target URL</label>
+              <input type="text" id="audit-target-url" class="form-input" style="width:100%;font-size:var(--font-sm);" value="https://link.bestdayfitness.com/preview/VRsgFMkoL8fUwW9W4ckU?v_test=1790778792385#home" placeholder="https://...">
+            </div>
+            <div style="display:flex;gap:8px;align-self:flex-end;">
+              <button class="btn btn-secondary btn-sm" id="btn-audit-preset-preview" type="button">Hosted GHL Preview</button>
+              <button class="btn btn-secondary btn-sm" id="btn-audit-preset-prod" type="button">Production</button>
+              <button class="btn btn-primary btn-sm" id="btn-run-website-audit" type="button">Run Audit</button>
+            </div>
+          </div>
+
+          <div id="website-audit-results" style="margin-top:16px;">
+            <div class="os-empty">Click &ldquo;Run Audit&rdquo; to inspect the target page.</div>
+          </div>
+        </div>
+
+        <div class="content-card mt-4" id="ghl-schema-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <h2 style="margin:0;">Approved-Fact GHL Schema &amp; Tracking Generator</h2>
+                <span class="badge" style="background:rgba(16,185,129,0.15);color:var(--color-success);font-size:0.75rem;padding:2px 8px;border-radius:4px;font-weight:600;">4-Tier Validated</span>
+              </div>
+              <p class="text-muted" style="margin:4px 0 0;">Generates clean Schema.org graph complying with Google self-serving review policy, approved 7-day business hours (Mon–Sat 4 AM–10 PM, Sun 9 AM–5 PM), and exact NAP facts. Omits 404 images.</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-copy-ghl-snippet" type="button">Copy Tracking Code</button>
+          </div>
+
+          <div id="ghl-schema-validation-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <div style="margin-top:12px;">
+            <label for="ghl-snippet-output" style="font-size:var(--font-xs);font-weight:600;display:block;margin-bottom:4px;">GHL Header Tracking Code (Paste into GHL Page Builder &rarr; Settings &rarr; Tracking Code &rarr; Header)</label>
+            <textarea id="ghl-snippet-output" class="os-schema-box" readonly aria-label="GHL Header Tracking Code" style="min-height:220px;font-family:monospace;font-size:0.75rem;"></textarea>
+          </div>
+          <div class="text-muted" style="font-size:var(--font-xs);margin-top:8px;">
+            &#9432; <strong>Staging Preview Procedure:</strong> Paste snippet into GHL Builder header tracking code, click <em>Save</em> in the builder, and review via preview link. Do not publish to live production domain until owner launch authorization.
           </div>
         </div>
 

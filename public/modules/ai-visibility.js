@@ -244,7 +244,7 @@
   let avState = null;
   let avMetric = 'visibility';
   const AV_METRIC_META = {
-    visibility: { label: 'Visibility Score', desc: 'Percentage of AI answers that mention your brand.' },
+    visibility: { label: 'Search Visibility Score', desc: 'Percentage of search-grounded AI answers that recommend your brand. Requires verified search evidence.' },
     shareOfVoice: { label: 'How often you are named', desc: 'Your share of all brand mentions vs competitors in AI answers.' },
     sentiment: { label: 'Sentiment', desc: 'How positively AI describes you when it mentions you (100 = all positive).' }
   };
@@ -324,7 +324,17 @@
   function avRenderScore() {
     const snap = avState.latest;
     const val = avMetricValue(snap, avMetric);
-    avEl('av-score').innerHTML = (val == null ? '&mdash;' : val + (avMetric === 'sentiment' ? '' : '%'));
+    if (avMetric === 'visibility') {
+      if (val != null) {
+        avEl('av-score').innerHTML = `${val}%`;
+      } else if (snap && snap.modelOnlyVisibilityScore != null) {
+        avEl('av-score').innerHTML = `<span style="font-size:0.65em;display:block;color:var(--text-muted);">Model-only: ${snap.modelOnlyVisibilityScore}%</span><span style="font-size:0.45em;display:block;color:var(--warn-color,#e65100);">Search Unavailable</span>`;
+      } else {
+        avEl('av-score').innerHTML = '&mdash;';
+      }
+    } else {
+      avEl('av-score').innerHTML = (val == null ? '&mdash;' : val + (avMetric === 'sentiment' ? '' : '%'));
+    }
     avEl('av-metric-desc').innerText = AV_METRIC_META[avMetric].desc;
     const d = avDeltaVal(avMetric);
     const dEl = avEl('av-delta');
@@ -344,9 +354,11 @@
     const snap = avState.latest;
     if (!snap || !snap.perEngine || !snap.perEngine.length) { box.style.display = 'none'; return; }
     box.style.display = '';
-    box.innerHTML = `<div class="av-lb-title">Visibility by engine &middot; latest check</div>` + snap.perEngine.map(pe =>
-      `<div class="av-eng-row"><span>${avEsc(pe.label || pe.engine)}</span><span class="av-eng-track"><span class="av-eng-fill" style="width:${pe.score}%"></span></span><span style="text-align:right;font-weight:700;">${pe.score}%</span></div>`
-    ).join('');
+    box.innerHTML = `<div class="av-lb-title">Visibility by engine &middot; latest check</div>` + snap.perEngine.map(pe => {
+      const scoreText = pe.score != null ? `${pe.score}%` : (pe.modelScore != null ? `Model-only: ${pe.modelScore}%` : 'Unavailable');
+      const widthVal = pe.score != null ? pe.score : (pe.modelScore != null ? pe.modelScore : 0);
+      return `<div class="av-eng-row"><span>${avEsc(pe.label || pe.engine)}</span><span class="av-eng-track"><span class="av-eng-fill" style="width:${widthVal}%"></span></span><span style="text-align:right;font-weight:700;font-size:12px;">${avEsc(scoreText)}</span></div>`;
+    }).join('');
   }
 
   function avRenderLeaderboard() {
@@ -380,7 +392,7 @@
     if (!avState) return;
     avRenderEngines();
     const anyConfigured = avState.anyConfigured;
-    const hasData = !!avState.latest;
+    const hasData = !!avState.latest && avState.latest.measured !== false && avState.latest.status !== 'not_yet_measured';
     const emptyEl = avEl('av-empty'), mainEl = avEl('av-main');
     // auto-weekly toggle + running state
     const autoBox = avEl('av-auto'); if (autoBox) autoBox.checked = !!avState.autoEnabled;
@@ -394,9 +406,16 @@
     if (!hasData) {
       mainEl.style.display = 'none';
       emptyEl.style.display = '';
-      emptyEl.innerHTML = anyConfigured
-        ? `Track how often <b>${avEsc(avState.brand)}</b> is recommended across AI answer engines. Click <b>Run AI visibility check</b> to run your tracked prompts across ${avState.engines.filter(e => e.configured).map(e => e.label).join(', ')} and build your first score.`
-        : `No AI engines are connected yet. Add <b>GEMINI_API_KEY</b> in Settings/Railway to check Google's AI now — and <b>OPENAI_API_KEY</b> / <b>PERPLEXITY_API_KEY</b> to also track ChatGPT and Perplexity. Each engine lights up automatically once its key is set.`;
+      const catLabel = (avState.serviceCategory && avState.serviceCategory !== 'all') ? avState.serviceCategory : '';
+      if (catLabel) {
+        emptyEl.innerHTML = anyConfigured
+          ? `Track AI visibility for <b>${avEsc(catLabel)}</b>. No checks have been recorded for this service category yet. Click <b>Run AI visibility check</b> to evaluate your ${avEsc(catLabel)} prompts.`
+          : `Track AI visibility for <b>${avEsc(catLabel)}</b>. No AI engines are connected yet. Add <b>GEMINI_API_KEY</b> in Settings/Railway to check Google's AI now.`;
+      } else {
+        emptyEl.innerHTML = anyConfigured
+          ? `Track how often <b>${avEsc(avState.brand)}</b> is recommended across AI answer engines. Click <b>Run AI visibility check</b> to run your tracked prompts across ${avState.engines.filter(e => e.configured).map(e => e.label).join(', ')} and build your first score.`
+          : `No AI engines are connected yet. Add <b>GEMINI_API_KEY</b> in Settings/Railway to check Google's AI now — and <b>OPENAI_API_KEY</b> / <b>PERPLEXITY_API_KEY</b> to also track ChatGPT and Perplexity. Each engine lights up automatically once its key is set.`;
+      }
       return;
     }
     emptyEl.style.display = 'none';
@@ -418,10 +437,19 @@
     } catch (e) { return ''; }
   }
 
-  async function loadAiVisibility() {
+  async function loadAiVisibility(category) {
     try {
-      const res = await fetch('/api/ai-visibility');
+      const filterEl = avEl('av-service-filter');
+      const cat = category !== undefined ? category : (filterEl ? filterEl.value : 'all');
+      if (filterEl && category !== undefined && filterEl.value !== category) {
+        filterEl.value = category;
+      }
+      const url = cat && cat !== 'all' ? `/api/ai-visibility?category=${encodeURIComponent(cat)}` : '/api/ai-visibility';
+      const res = await fetch(url);
       avState = await res.json();
+      if (avState && avState.promptSetVersion && avEl('av-promptset-version')) {
+        avEl('av-promptset-version').innerText = 'Prompt Set v' + avState.promptSetVersion;
+      }
       avRender();
     } catch (e) { /* leave as-is */ }
   }
@@ -433,26 +461,50 @@
     if (avPollTimer) return;
     avPollTimer = setInterval(async () => {
       try {
-        const r = await fetch('/api/ai-visibility'); const d = await r.json();
-        if (!d.running) { clearInterval(avPollTimer); avPollTimer = null; const rb = avEl('av-run'); if (rb) delete rb.dataset.busy; avState = d; avRender(); }
-      } catch (e) { clearInterval(avPollTimer); avPollTimer = null; }
+        const filterEl = avEl('av-service-filter');
+        const cat = filterEl ? filterEl.value : 'all';
+        const url = cat && cat !== 'all' ? `/api/ai-visibility?category=${encodeURIComponent(cat)}` : '/api/ai-visibility';
+        const r = await fetch(url);
+        const d = await r.json();
+        if (!d.running) {
+          clearInterval(avPollTimer);
+          avPollTimer = null;
+          const rb = avEl('av-run');
+          if (rb) delete rb.dataset.busy;
+          avState = d;
+          avRender();
+        }
+      } catch (e) {
+        clearInterval(avPollTimer);
+        avPollTimer = null;
+      }
     }, 5000);
   }
 
   document.querySelectorAll('#aio-tab .av-mtab').forEach(btn => {
     btn.addEventListener('click', () => { avMetric = btn.dataset.metric; if (avState && avState.latest) { avRenderScore(); avRenderChart(); } });
   });
+  const avServiceFilter = avEl('av-service-filter');
+  if (avServiceFilter) {
+    avServiceFilter.addEventListener('change', () => loadAiVisibility(avServiceFilter.value));
+  }
+
   const avRunBtn = avEl('av-run');
   if (avRunBtn) avRunBtn.addEventListener('click', async () => {
     if (avState && !avState.anyConfigured) { alert('No AI engines are connected. Add GEMINI_API_KEY (and optionally OPENAI_API_KEY / PERPLEXITY_API_KEY) in Railway, then run again.'); return; }
     avRunBtn.disabled = true; avRunBtn.dataset.busy = '1'; avRunBtn.innerHTML = 'Checking engines…';
+    const selectedCat = avServiceFilter ? avServiceFilter.value : 'all';
+    const payload = {};
+    if (selectedCat && selectedCat !== 'all') {
+      payload.serviceCategories = [selectedCat];
+    }
     try {
-      const r = await authFetch('/api/ai-visibility/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const r = await authFetch('/api/ai-visibility/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const d = await r.json();
       if (!r.ok || !d.success) throw new Error(d.error || 'Run failed');
       delete avRunBtn.dataset.busy;
-      await loadAiVisibility();
-    } catch (e) { delete avRunBtn.dataset.busy; alert('AI visibility check failed: ' + e.message); await loadAiVisibility(); }
+      await loadAiVisibility(selectedCat);
+    } catch (e) { delete avRunBtn.dataset.busy; alert('AI visibility check failed: ' + e.message); await loadAiVisibility(selectedCat); }
   });
   // Auto-weekly toggle
   const avAutoBox = avEl('av-auto');
@@ -472,6 +524,25 @@
   });
   const avPromptsCancel = avEl('av-prompts-cancel');
   if (avPromptsCancel) avPromptsCancel.addEventListener('click', () => { avPromptsPanel.style.display = 'none'; });
+
+  // Preset loaders in prompt editor
+  document.querySelectorAll('.av-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.cat;
+      const approved = (avState && avState.approvedServicePrompts) || {};
+      const toAdd = [];
+      if (cat === 'all') {
+        Object.values(approved).forEach(list => { if (Array.isArray(list)) toAdd.push(...list); });
+      } else if (Array.isArray(approved[cat])) {
+        toAdd.push(...approved[cat]);
+      }
+      if (!toAdd.length) return;
+      const current = avPromptsText.value.split('\n').map(s => s.trim()).filter(Boolean);
+      const combined = Array.from(new Set([...current, ...toAdd])).slice(0, 25);
+      avPromptsText.value = combined.join('\n');
+    });
+  });
+
   const avPromptsSave = avEl('av-prompts-save');
   if (avPromptsSave) avPromptsSave.addEventListener('click', async () => {
     const list = avPromptsText.value.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 25);
@@ -484,6 +555,24 @@
       avPromptsPanel.style.display = 'none';
     } catch (e) { alert('Could not save prompts: ' + e.message); }
     finally { avPromptsSave.disabled = false; avPromptsSave.innerText = 'Save prompts'; }
+  });
+
+  const avPromptsMerge = avEl('av-prompts-merge');
+  if (avPromptsMerge) avPromptsMerge.addEventListener('click', async () => {
+    const list = avPromptsText.value.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 25);
+    if (!list.length) { alert('Add at least one search prompt.'); return; }
+    avPromptsMerge.disabled = true; avPromptsMerge.innerText = 'Merging…';
+    try {
+      const r = await authFetch('/api/ai-visibility/prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompts: list, preserveExisting: true }),
+      });
+      const d = await r.json(); if (!r.ok || !d.success) throw new Error(d.error || 'Merge failed');
+      if (avState) avState.prompts = d.prompts;
+      avPromptsPanel.style.display = 'none';
+    } catch (e) { alert('Could not merge prompts: ' + e.message); }
+    finally { avPromptsMerge.disabled = false; avPromptsMerge.innerText = 'Merge & preserve existing'; }
   });
 
   // --- FACTCHECK / BRAND-ACCURACY MONITOR (P4a) ---

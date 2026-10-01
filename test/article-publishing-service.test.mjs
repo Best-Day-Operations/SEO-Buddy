@@ -8,6 +8,7 @@ const {
   articleSlug,
   createArticlePublishingService,
   jsonForHtml,
+  validateFactualPublication,
 } = require('../lib/article-publishing-service');
 
 const AT = new Date('2026-09-09T12:00:00.000Z');
@@ -186,3 +187,204 @@ test('publishing helpers are deterministic and dependency wiring fails fast', ()
   assert.equal(jsonForHtml({ value: '</script>' }).includes('<'), false);
   assert.throws(() => createArticlePublishingService({}), /getHistory is required/);
 });
+
+test('factual publication validation rejects prohibited claims, incorrect durations, and non-$99 pricing', async () => {
+  const testCase = fixture();
+
+  // Prohibited claim: medical-grade
+  await assert.rejects(
+    () => testCase.service.publish('HaloRed Light', '<p>Uses medical-grade LEDs.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('medical-grade'),
+  );
+
+  // Prohibited claim: cures
+  await assert.rejects(
+    () => testCase.service.publish('Relief Guide', '<p>Our program cures arthritis naturally.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('cure'),
+  );
+
+  // Prohibited claim: semi-private / group
+  await assert.rejects(
+    () => testCase.service.publish('Personal Training', '<p>Try our semi-private training sessions.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('1-on-1 private training'),
+  );
+
+  // Incorrect duration: 60-minute
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Book a 60-minute consultation today.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('45 minutes'),
+  );
+
+  // Free consultation claim
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Schedule your free consultation now.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99 fee'),
+  );
+
+  // Non-$99 price
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Book your $150 consultation today.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // Valid claims pass cleanly
+  const validResult = await testCase.service.publish(
+    'Longevity Fitness',
+    '<p>Book a 45-minute consultation for $99 with 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(validResult.success, true);
+});
+
+test('author bio removes unverified default tagline unless explicitly configured', async () => {
+  // Without author bio configured: no unverified tagline
+  const noBioCase = fixture();
+  const noBioResult = await noBioCase.service.publish('Longevity Training', '<p>Body text.</p>', 'draft');
+  assert.doesNotMatch(noBioResult.content, /Certified longevity, mobility, and functional movement specialist/);
+
+  // With author bio explicitly configured via config
+  const withBioCase = fixture();
+  const withBioResult = await withBioCase.service.publish(
+    'Longevity Training',
+    '<p>Body text.</p>',
+    'draft',
+    { authorBio: 'NASM Certified Personal Trainer with 10+ years experience.' },
+  );
+  assert.match(withBioResult.content, /NASM Certified Personal Trainer with 10\+ years experience\./);
+
+  // With author bio explicitly configured via env
+  const envBioCase = fixture({
+    env: {
+      ...fixture().env,
+      GHL_AUTHOR_BIO: 'Expert Fitness Coach at Best Day Fitness.',
+    },
+  });
+  const envBioResult = await envBioCase.service.publish('Longevity Training', '<p>Body text.</p>', 'draft');
+  assert.match(envBioResult.content, /Expert Fitness Coach at Best Day Fitness\./);
+});
+
+test('service-specific factual validation disentangles consultation duration from personal training duration', async () => {
+  const testCase = fixture();
+
+  // "Your consultation lasts 60 minutes" must fail
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Your consultation lasts 60 minutes.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('45 minutes'),
+  );
+
+  // "Consultations cost $150" must fail
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Consultations cost $150.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // "Personal training sessions are normally 60 minutes, with 30-minute sessions available" must pass cleanly
+  const ptResult = await testCase.service.publish(
+    'Private Personal Training',
+    '<p>Personal training sessions are normally 60 minutes, with 30-minute sessions available. We offer 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(ptResult.success, true);
+
+  // Combined accurate statement passes cleanly
+  const combinedResult = await testCase.service.publish(
+    'Comprehensive Fitness Program',
+    '<p>Schedule your 45-minute consultation for $99. Our personal training sessions are normally 60 minutes, with 30-minute sessions available.</p>',
+    'draft',
+  );
+  assert.equal(combinedResult.success, true);
+});
+
+test('factual validation rejects prohibited claims or invalid facts inside author bio or injected schema', async () => {
+  const testCase = fixture();
+
+  // Prohibited claim inside authorBio
+  await assert.rejects(
+    () => testCase.service.publish(
+      'Clean Body Title',
+      '<p>Our trainers provide 1-on-1 private training.</p>',
+      'draft',
+      { authorBio: 'Senior trainer who cures chronic back pain through movement.' },
+    ),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('cure'),
+  );
+
+  // Prohibited duration inside authorBio
+  await assert.rejects(
+    () => testCase.service.publish(
+      'Clean Body Title',
+      '<p>Our trainers provide 1-on-1 private training.</p>',
+      'draft',
+      { authorBio: 'Schedule an initial 60-minute consultation with me.' },
+    ),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('45 minutes'),
+  );
+
+  // Prohibited claim inside custom injected schema via buildLocalBusinessSchema override
+  const schemaTestCase = fixture({
+    buildLocalBusinessSchema: domain => ({
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      description: 'We offer semi-private training classes for everyone.',
+      url: domain,
+    }),
+  });
+  await assert.rejects(
+    () => schemaTestCase.service.publish('Clean Body Title', '<p>Healthy living tips.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('1-on-1 private training'),
+  );
+});
+
+test('consultation pricing validation strictly rejects $200 current price and fractional prices while allowing approved $99 normally $200 wording', async () => {
+  const testCase = fixture();
+
+  // "Consultation costs $200" must fail (it is claiming current price is $200)
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Consultation costs $200.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // "Consultation fee is $200" must fail
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Our consultation fee is $200.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // "Consultation costs $99.95" must fail (must be exact $99)
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Consultation costs $99.95.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // "Consultations cost $99.50" must fail
+  await assert.rejects(
+    () => testCase.service.publish('Getting Started', '<p>Consultations cost $99.50.</p>', 'draft'),
+    error => error.code === 'FACTUAL_VALIDATION_FAILED' && error.message.includes('$99'),
+  );
+
+  // Approved wording: $99, normally $200 must pass cleanly
+  const approvedWording1 = await testCase.service.publish(
+    'Getting Started',
+    '<p>Book a 45-minute consultation for $99 (normally $200). 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(approvedWording1.success, true);
+
+  // Approved wording: $99 (regularly $200 value) must pass cleanly
+  const approvedWording2 = await testCase.service.publish(
+    'Getting Started',
+    '<p>Consultations are $99, regularly a $200 value. 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(approvedWording2.success, true);
+
+  // Personal training 60-minute and 30-minute descriptions remain completely unaffected
+  const ptWording = await testCase.service.publish(
+    'Personal Training Options',
+    '<p>Personal training sessions are normally 60 minutes, with 30-minute sessions available. We offer 1-on-1 private training.</p>',
+    'draft',
+  );
+  assert.equal(ptWording.success, true);
+});
+
+

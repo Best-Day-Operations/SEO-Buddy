@@ -1746,9 +1746,39 @@ test('reviews service preserves parsing, audits, snapshots, coalescing, caching,
   assert.equal(providerCalls[0].policy.throwOnHttpError, false);
   assert.equal(providerCalls[0].policy.policy.timeoutMs, 12000);
   assert.equal(saved.length, 1);
-  assert.equal(saved[0].at(-1).date, '2026-09-01');
   assert.strictEqual(await service.getStats(), first);
   assert.equal(providerCalls.length, 4, 'fresh review stats should come from the five-minute cache');
+
+  const apiCalls = [];
+  const apiService = createReviewsService({
+    providerRuntime: {
+      async fetch(provider, url, requestOptions, policy) {
+        apiCalls.push(url);
+        if (url === 'https://reviews.example/') return response({ body: pageHtml, contentType: 'text/html' });
+        if (url === 'https://reviews.example/api/reviews') return response({
+          json: {
+            reviews: [
+              { sourceReviewId: 'g-1', source: 'google', author: 'Dr. Test', rating: 5, createdAt: '2026-08-15T12:00:00Z' },
+              { sourceReviewId: 'f-1', source: 'facebook', author: 'Pat', rating: 5, createdAt: '2026-08-20T12:00:00Z' },
+            ],
+            completeGoogle: true,
+          },
+        });
+        if (url === 'https://reviews.example/og.png') return response({ contentType: 'image/png' });
+        if (url === 'https://reviews.example/sitemap.xml') return response({ body: '<?xml version="1.0"?><urlset><lastmod>2026-08-20</lastmod></urlset>', contentType: 'application/xml' });
+        if (url === 'https://reviews.example/robots.txt') return response({ body: 'User-agent: *\nAllow: /' });
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    },
+    getReviewsUrl: () => 'https://reviews.example',
+    getReviewsApiUrl: () => 'https://reviews.example/api/reviews',
+    saveSnapshots: () => {},
+    getTrustpilotSettings: () => ({}),
+  });
+  const apiStats = await apiService.getStats();
+  assert.equal(apiStats.inventory.published, 2);
+  assert.equal(apiStats.inventory.byPlatform.google, 1);
+  assert.equal(apiStats.inventory.byPlatform.facebook, 1);
 
   const trustpilotCalls = [];
   const trustpilotService = createReviewsService({
@@ -3180,6 +3210,10 @@ test('article quality is deterministic and blocks only structural or brand-safet
   const unsafe = assessArticleQuality('<p>Short copy</p>', { brandViolations: ['blocked phrase'] });
   assert.equal(unsafe.publishable, false);
   assert.ok(unsafe.blockingIssues.some(issue => /blocked brand/i.test(issue)));
+
+  const claimsUnsafe = assessArticleQuality(`<div><h1>Guide</h1><p>${'direct answer '.repeat(30)}</p><h2>What matters?</h2><p>${'useful detail '.repeat(360)} We offer medical-grade red light therapy and guaranteed weight loss.</p><h2>How does it work?</h2><h2>Practical steps</h2></div>`);
+  assert.equal(claimsUnsafe.publishable, false);
+  assert.ok(claimsUnsafe.blockingIssues.some(issue => /prohibited factual claims/i.test(issue)));
 });
 
 test('singleFlight coalesces overlap without caching settled results', async () => {

@@ -51,7 +51,7 @@ const { createContentAutopilotService } = require('./lib/content-autopilot-servi
 const { recordGbpPublication, gbpPublicationStatus } = require('./lib/gbp-publication');
 const { registerContentRoutes } = require('./lib/content-routes');
 const { registerAiVisibilityRoutes } = require('./lib/ai-visibility-routes');
-const { DEFAULT_AI_ENGINES, DEFAULT_VIS_PROMPTS, createAiVisibilityService } = require('./lib/ai-visibility-service');
+const { DEFAULT_AI_ENGINES, DEFAULT_VIS_PROMPTS, APPROVED_SERVICE_PROMPTS, PROMPT_SET_VERSION, createAiVisibilityService } = require('./lib/ai-visibility-service');
 const { registerAiAuditRoutes } = require('./lib/ai-audit-routes');
 const { buildFactTruth, createAiFactCheckService } = require('./lib/ai-factcheck-service');
 const { createAiCrawlerService } = require('./lib/ai-crawler-service');
@@ -85,6 +85,8 @@ const { createCredentialMetadata } = require('./lib/credential-metadata');
 const { createReliabilityAlertService, registerReliabilityAlertRoutes } = require('./lib/reliability-alerts');
 const { resolveProcessRole } = require('./lib/process-role');
 const { createBackgroundRuntime } = require('./lib/background-runtime');
+const { createWebsiteAuditService, DEFAULT_AUDIT_TARGETS } = require('./lib/website-audit-service');
+const { buildGhlSchemaGraph, buildGhlTrackingSnippet, validateSchema, APPROVED_FACTS } = require('./lib/ghl-schema-service');
 
 // Load volume-backed configuration before composition. Deployments using
 // SECRET_STORAGE_MODE=managed keep credentials in host variables; dotenv's
@@ -123,6 +125,7 @@ const providerRuntime = createProviderRuntime({
     'search-console': { concurrency: 3, maxCallsPerWindow: 60, timeoutMs: 30000 },
     'google-indexing': { concurrency: 2, maxCallsPerWindow: 30, timeoutMs: 30000 },
     trustpilot: { concurrency: 2, maxCallsPerWindow: 60, timeoutMs: 20000 },
+    website: { concurrency: 2, maxCallsPerWindow: 30, timeoutMs: 30000 },
   },
 });
 let isShuttingDown = false;
@@ -1059,6 +1062,8 @@ registerAiVisibilityRoutes(app, {
   budgetBlock,
   save: saveAiVis,
   defaultPrompts: DEFAULT_VIS_PROMPTS,
+  approvedServicePrompts: APPROVED_SERVICE_PROMPTS,
+  promptSetVersion: PROMPT_SET_VERSION,
   logger: console,
 });
 
@@ -1181,6 +1186,88 @@ registerAiAuditRoutes(app, {
       logLabel: 'Reddit',
     },
   ],
+});
+
+// ============================================================
+// P4d — REPEATABLE WEBSITE AUDIT & GHL SCHEMA ENGINE
+// Inspects live hosted GHL preview and production websites, validating
+// metadata, robots, schema graphs, content clarity, and asset bloat.
+// ============================================================
+const WEBSITE_AUDIT_FILE = path.join(DATA_DIR, 'website-audit.json');
+let websiteAuditDb = { latest: null, updatedAt: null, history: [], evidence: {} };
+if (fs.existsSync(WEBSITE_AUDIT_FILE)) {
+  try {
+    const l = JSON.parse(fs.readFileSync(WEBSITE_AUDIT_FILE, 'utf8'));
+    if (l && typeof l === 'object') {
+      websiteAuditDb = {
+        latest: l.latest || null,
+        updatedAt: l.updatedAt || null,
+        history: Array.isArray(l.history) ? l.history : [],
+        evidence: l.evidence && typeof l.evidence === 'object' ? l.evidence : {},
+      };
+    }
+  } catch (e) {}
+} else {
+  try { writeJsonFileSync(WEBSITE_AUDIT_FILE, websiteAuditDb); } catch (e) {}
+}
+function saveWebsiteAudit() { saveJsonFileSync(WEBSITE_AUDIT_FILE, websiteAuditDb, 'Website Audit'); }
+
+const websiteAuditService = createWebsiteAuditService({
+  state: websiteAuditDb,
+  save: saveWebsiteAudit,
+  providerRuntime,
+  getSiteUrl: () => DEFAULT_AUDIT_TARGETS.preview,
+  logger,
+});
+
+app.get('/api/website-audit', (req, res) => {
+  res.json({
+    latest: websiteAuditService.getLatest(),
+    updatedAt: websiteAuditDb.updatedAt,
+    history: websiteAuditService.getHistory(),
+    running: websiteAuditService.isRunning(),
+    defaultTargets: DEFAULT_AUDIT_TARGETS,
+  });
+});
+
+app.post('/api/website-audit/run', requireAuth, async (req, res) => {
+  const targetUrl = req.body?.url ? String(req.body.url).trim() : null;
+  const result = await websiteAuditService.run(targetUrl);
+  if (!result.ok && result.busy) {
+    return res.json({ success: true, busy: true });
+  }
+  if (!result.ok && result.error && (result.error.includes('Disallowed target host') || result.error.includes('Invalid URL'))) {
+    return res.status(400).json({ success: false, error: result.error, snapshot: result.snapshot });
+  }
+  return res.json({ success: result.ok, snapshot: result.snapshot, error: result.error });
+});
+
+app.post('/api/website-audit/geo-import', requireAuth, (req, res) => {
+  const { targetUrl, evidence } = req.body || {};
+  if (!targetUrl || typeof targetUrl !== 'string' || !evidence || typeof evidence !== 'object') {
+    return res.status(400).json({ success: false, error: 'targetUrl string and evidence object are required.' });
+  }
+  try {
+    const importRes = websiteAuditService.importGeoEvidence(targetUrl, evidence);
+    return res.json({ success: true, importRes, latest: websiteAuditService.getLatest() });
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/ghl-schema', (req, res) => {
+  const domain = siteDomain();
+  const schemaGraph = buildGhlSchemaGraph({ domain });
+  const snippet = buildGhlTrackingSnippet({ domain });
+  const validation = validateSchema(schemaGraph);
+  res.json({
+    success: true,
+    domain,
+    approvedFacts: APPROVED_FACTS,
+    schemaGraph,
+    snippet,
+    validation,
+  });
 });
 
 // ============================================================
@@ -1809,6 +1896,7 @@ const reviewsService = createReviewsService({
   initialSnapshots: reviewsSnapshots,
   saveSnapshots: snapshots => saveJsonFileSync(REVIEWS_SNAPSHOTS_FILE, snapshots, 'Reviews snapshot'),
   getReviewsUrl: () => process.env.REVIEWS_URL || 'https://bestdayfitnessreviews.com',
+  getReviewsApiUrl: () => process.env.REVIEWS_API_URL || `${(process.env.REVIEWS_URL || 'https://bestdayfitnessreviews.com').replace(/\/+$/, '')}/api/reviews`,
   getTrustpilotSettings: () => ({
     apiKey: process.env.TRUSTPILOT_API_KEY,
     domain: process.env.TRUSTPILOT_DOMAIN,

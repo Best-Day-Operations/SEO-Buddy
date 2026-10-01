@@ -4,6 +4,8 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const {
+  APPROVED_SERVICE_PROMPTS,
+  PROMPT_SET_VERSION,
   DEFAULT_AI_ENGINES,
   DEFAULT_VIS_PROMPTS,
   createAiVisibilityService,
@@ -24,7 +26,15 @@ function serviceFixture(overrides = {}) {
     providerRuntime: {
       fetch: async (...args) => {
         fetchCalls.push(args);
-        return { json: async () => ({ choices: [{ message: { content: ' provider answer ' } }], citations: ['https://source.example'] }) };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            output_text: ' provider answer ',
+            choices: [{ message: { content: ' provider answer ' } }],
+            citations: ['https://source.example'],
+          }),
+        };
       },
     },
     parseJson: JSON.parse,
@@ -75,9 +85,11 @@ test('AI visibility provider adapters preserve request and response contracts', 
   assert.equal(openai.answer, 'provider answer');
   assert.deepEqual(perplexity.sources, [{ title: '', uri: 'https://source.example' }]);
   assert.equal(fetchCalls[0][0], 'openai');
-  assert.equal(fetchCalls[0][1], 'https://api.openai.com/v1/chat/completions');
+  assert.equal(fetchCalls[0][1], 'https://api.openai.com/v1/responses');
   assert.equal(fetchCalls[0][2].headers.Authorization, 'Bearer openai-secret');
   assert.equal(JSON.parse(fetchCalls[0][2].body).model, 'openai-test');
+  assert.equal(JSON.parse(fetchCalls[0][2].body).input, 'openai prompt');
+  assert.deepEqual(JSON.parse(fetchCalls[0][2].body).tools, [{ type: 'web_search' }]);
   assert.equal(fetchCalls[1][0], 'perplexity');
   assert.equal(JSON.parse(fetchCalls[1][2].body).model, 'pplx-test');
   assert.deepEqual(await service.askEngine('missing', 'prompt'), { ok: false, answer: '', sources: [], error: 'unknown engine' });
@@ -101,9 +113,17 @@ test('AI visibility run keeps scoring, persistence, retention, and metering stab
     meterUsage: engine => usage.push(engine),
     save: () => { saves += 1; },
     providerRuntime: {
-      fetch: async () => ({
-        json: async () => ({ choices: [{ message: { content: providerCall++ === 0 ? 'Best Day Fitness and Rival Gym' : 'Rival Gym' } }] }),
-      }),
+      fetch: async () => {
+        const text = providerCall++ === 0 ? 'Best Day Fitness and Rival Gym' : 'Rival Gym';
+        return {
+          ok: true,
+          json: async () => ({
+            output_text: text,
+            output: [{ type: 'web_search_call', status: 'completed', action: { sources: [{ url: 'https://bestdayfitness.com' }] } }],
+            choices: [{ message: { content: text } }],
+          }),
+        };
+      },
     },
     geminiGenerate: async request => {
       if (request.config) return { text: '' };
@@ -117,8 +137,18 @@ test('AI visibility run keeps scoring, persistence, retention, and metering stab
   assert.equal(snapshot.shareOfVoice, 33);
   assert.equal(snapshot.sentimentScore, 100);
   assert.equal(snapshot.brandMentions, 1);
-  assert.equal(snapshot.totalAnswers, 2);
-  assert.deepEqual(snapshot.perEngine, [{ engine: 'openai', label: 'ChatGPT', score: 50, answers: 2 }]);
+  assert.deepEqual(snapshot.perEngine, [{
+    engine: 'openai',
+    label: 'ChatGPT',
+    score: 50,
+    searchScore: 50,
+    modelScore: null,
+    answers: 2,
+    searchAnswers: 2,
+    modelAnswers: 0,
+    classifiedAnswers: 2,
+    modelClassifiedAnswers: 0,
+  }]);
   assert.deepEqual(snapshot.leaderboard.map(row => [row.name, row.mentions, row.score]), [
     ['Rival Gym', 2, 100],
     ['Best Day Fitness', 1, 50],
@@ -222,3 +252,805 @@ test('scheduled and manual visibility work share one overlap guard and recover a
   assert.equal(saves.length, 2, 'a later scheduled run can persist after recovery');
   assert.equal(service.running, false);
 });
+
+test('OpenAI web search adapter validates Responses endpoint, tools contract, search execution evidence, and citations', async () => {
+  const { service, fetchCalls } = serviceFixture({
+    env: { OPENAI_API_KEY: 'openai-secret' },
+    openAiModel: 'gpt-4o',
+    providerRuntime: {
+      fetch: async (...args) => {
+        fetchCalls.push(args);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'resp_123',
+            output_text: null, // Test that output_text is parsed from message content type 'output_text'
+            output: [
+              {
+                type: 'web_search_call',
+                status: 'completed',
+                action: {
+                  sources: [
+                    { url: 'https://competitor.example/directory', title: 'Gym Directory' },
+                  ],
+                },
+              },
+              {
+                type: 'message',
+                content: [
+                  {
+                    type: 'output_text',
+                    text: 'Best Day Fitness is recommended in St. Petersburg for longevity training.',
+                    annotations: [
+                      { type: 'url_citation', url: 'https://bestdayfitness.com/consultation', title: 'Consultation' },
+                    ],
+                  },
+                ],
+              },
+            ],
+          }),
+        };
+      },
+    },
+  });
+
+  const res = await service.askEngine('openai', 'senior fitness St Petersburg');
+  assert.equal(res.ok, true);
+  assert.equal(res.searchExecuted, true, 'search execution evidence captured');
+  assert.match(res.answer, /Best Day Fitness/);
+  // Inline citations are kept separate from searchSources
+  assert.deepEqual(res.citations, [
+    { title: 'Consultation', uri: 'https://bestdayfitness.com/consultation' },
+  ]);
+  assert.deepEqual(res.searchSources, [
+    { title: 'Gym Directory', uri: 'https://competitor.example/directory' },
+  ]);
+  assert.deepEqual(res.sources, [
+    { title: 'Consultation', uri: 'https://bestdayfitness.com/consultation' },
+  ]);
+
+  assert.equal(fetchCalls[0][0], 'openai');
+  assert.equal(fetchCalls[0][1], 'https://api.openai.com/v1/responses');
+  const reqBody = JSON.parse(fetchCalls[0][2].body);
+  assert.equal(reqBody.model, 'gpt-4o');
+  assert.equal(reqBody.input, 'senior fitness St Petersburg');
+  assert.deepEqual(reqBody.tools, [{ type: 'web_search' }]);
+  assert.deepEqual(reqBody.include, ['web_search_call.action.sources']);
+
+  // Provider error test: 429 rate limit error propagation
+  const errorFixture = serviceFixture({
+    env: { OPENAI_API_KEY: 'openai-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { message: 'Rate limit exceeded' } }),
+      }),
+    },
+  });
+  const errRes = await errorFixture.service.askEngine('openai', 'query');
+  assert.equal(errRes.ok, false);
+  assert.equal(errRes.code, 'PROVIDER_USAGE_LIMIT_REACHED');
+  assert.match(errRes.error, /Rate limit exceeded|OpenAI HTTP error|usage limit/i);
+});
+
+test('recommendation classification regression: missing GEMINI_API_KEY marks recommendation unavailable and excludes from denominator', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret' }, // Missing GEMINI_API_KEY
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          output_text: 'Best Day Fitness is mentioned here, but it was noisy and crowded.',
+          output: [],
+        }),
+      }),
+    },
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.brandMentions, 1, 'brand mention detected via stringHit');
+  assert.equal(snapshot.brandRecommendations, 0, 'missing key must NOT invent a recommendation from stringHit');
+  assert.equal(snapshot.recommendationClassifiedCount, 0, 'zero answers had recommendation classification');
+  assert.equal(snapshot.visibilityScore, null, 'visibility score is null when classification is unavailable');
+  assert.equal(snapshot.recommendationRate, null, 'recommendation rate is null when classification is unavailable');
+  assert.equal(snapshot.answers[0].recommended, null, 'recommended is explicitly null, not boolean stringHit');
+  assert.equal(snapshot.answers[0].classificationStatus, 'unavailable');
+  assert.equal(snapshot.answers[0].sentiment, 'unclassified');
+});
+
+test('recommendation classification regression: classification timeout/error marks recommendation unavailable', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({ output_text: 'Best Day Fitness is in St. Petersburg.', output: [] }),
+      }),
+    },
+    geminiGenerate: async () => {
+      throw new Error('ETIMEDOUT');
+    },
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.brandMentions, 1);
+  assert.equal(snapshot.brandRecommendations, 0);
+  assert.equal(snapshot.recommendationClassifiedCount, 0);
+  assert.equal(snapshot.visibilityScore, null, 'timeout excludes answer from recommendation denominator');
+  assert.equal(snapshot.answers[0].recommended, null);
+  assert.equal(snapshot.answers[0].classificationStatus, 'unavailable');
+});
+
+test('recommendation classification regression: malformed classification JSON marks recommendation unavailable', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({ output_text: 'Best Day Fitness is in St. Petersburg.', output: [] }),
+      }),
+    },
+    geminiGenerate: async () => ({ text: 'Not valid JSON at all!' }),
+    parseJson: () => null,
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.brandMentions, 1);
+  assert.equal(snapshot.brandRecommendations, 0);
+  assert.equal(snapshot.recommendationClassifiedCount, 0);
+  assert.equal(snapshot.visibilityScore, null);
+  assert.equal(snapshot.answers[0].recommended, null);
+  assert.equal(snapshot.answers[0].classificationStatus, 'unavailable');
+});
+
+test('recommendation classification regression: neutral mentions do NOT become recommendations (visibility score: 0%)', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          output_text: 'Best Day Fitness is located at 6619 1st Ave S.',
+          output: [{ type: 'web_search_call', status: 'completed', action: { sources: [{ url: 'https://bestdayfitness.com' }] } }],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: true,
+        recommended: false,
+        sentiment: 'neutral',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.brandMentions, 1, 'brand was mentioned');
+  assert.equal(snapshot.brandRecommendations, 0, 'neutral mention is NOT a recommendation');
+  assert.equal(snapshot.recommendationClassifiedCount, 1);
+  assert.equal(snapshot.visibilityScore, 0, 'visibility score is 0% for neutral mention');
+  assert.equal(snapshot.answers[0].mentioned, true);
+  assert.equal(snapshot.answers[0].recommended, false);
+  assert.equal(snapshot.answers[0].sentiment, 'neutral');
+});
+
+test('recommendation classification regression: negative mentions strictly produce recommended: false and 0% score', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          output_text: 'Avoid Best Day Fitness, the coaching was disappointing.',
+          output: [{ type: 'web_search_call', status: 'completed', action: { sources: [{ url: 'https://bestdayfitness.com' }] } }],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: true,
+        recommended: true, // Erroneously claims true, must be strictly overridden by sentiment: negative
+        sentiment: 'negative',
+        competitors: ['Better Gym'],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.brandMentions, 1, 'brand was mentioned');
+  assert.equal(snapshot.brandRecommendations, 0, 'negative mention must NEVER become a recommendation');
+  assert.equal(snapshot.recommendationClassifiedCount, 1);
+  assert.equal(snapshot.visibilityScore, 0, 'negative mention produces 0%, never 100%');
+  assert.equal(snapshot.answers[0].mentioned, true);
+  assert.equal(snapshot.answers[0].recommended, false);
+  assert.equal(snapshot.answers[0].sentiment, 'negative');
+});
+
+test('citation URL matching uses validated hostnames rather than brand substrings in paths or titles', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Visit Rival Fitness.' } }],
+          citations: [
+            'https://competitor.example/articles/bestdayfitness-review',
+          ],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: false,
+        recommended: false,
+        sentiment: 'absent',
+        competitors: ['Rival Fitness'],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.answers[0].cited, false, 'brandRoot in path on competitor domain must NOT count as citation');
+
+  // Now verify with authorized domain
+  const state2 = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service: service2 } = serviceFixture({
+    state: state2,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Best Day Fitness is at 6619 1st Ave S.' } }],
+          citations: ['https://bestdayfitness.com/about'],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: true,
+        recommended: true,
+        sentiment: 'positive',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const res2 = await service2.runVisibility(['openai']);
+  assert.equal(res2.snapshot.answers[0].cited, true, 'validated hostname matches citation');
+  assert.equal(res2.snapshot.answers[0].citedSources[0].uri, 'https://bestdayfitness.com/about');
+});
+
+test('OpenAI responses rejects empty answers appropriately', async () => {
+  const { service } = serviceFixture({
+    env: { OPENAI_API_KEY: 'openai-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          output_text: '   ',
+          output: [],
+        }),
+      }),
+    },
+  });
+
+  const res = await service.askEngine('openai', 'query');
+  assert.equal(res.ok, false);
+  assert.match(res.error, /Empty or invalid answer/i);
+});
+
+test('classifier validation rejects arbitrary JSON objects lacking boolean mentioned or valid sentiment', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({ output_text: 'Best Day Fitness is in St. Petersburg.', output: [] }),
+      }),
+    },
+    // Classifier returns arbitrary JSON lacking mentioned or valid sentiment
+    geminiGenerate: async () => ({
+      text: JSON.stringify({ randomField: 123, status: 'ok' }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  assert.equal(snapshot.brandMentions, 1);
+  assert.equal(snapshot.brandRecommendations, 0);
+  assert.equal(snapshot.recommendationClassifiedCount, 0);
+  assert.equal(snapshot.visibilityScore, null, 'malformed classifier object excluded from denominator');
+  assert.equal(snapshot.answers[0].recommended, null);
+  assert.equal(snapshot.answers[0].classificationStatus, 'unavailable');
+});
+
+test('uncited search action sources do NOT falsely trigger brand citation metric', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          id: 'resp_456',
+          output: [
+            {
+              type: 'web_search_call',
+              status: 'completed',
+              action: {
+                sources: [
+                  // Search inspected bestdayfitness.com during browsing
+                  { url: 'https://bestdayfitness.com/programs', title: 'Programs' },
+                ],
+              },
+            },
+            {
+              type: 'message',
+              content: [
+                {
+                  type: 'output_text',
+                  // But the actual generated answer only cites a competitor directory
+                  text: 'Check out local fitness studios in the Tampa Bay area.',
+                  annotations: [
+                    { type: 'url_citation', url: 'https://tampabaygyms.example/list', title: 'Tampa Gyms' },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: false,
+        recommended: false,
+        sentiment: 'absent',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  // Only actual answer citations count toward cited!
+  assert.equal(snapshot.answers[0].cited, false, 'search action source does not count as answer citation');
+  assert.equal(snapshot.brandCitations, 0);
+});
+
+test('failed search call with action object is NOT searchExecuted: true and is excluded from search visibility denominator', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          id: 'resp_failed_search',
+          output: [
+            {
+              type: 'web_search_call',
+              status: 'failed', // Search execution failed!
+              action: {
+                query: 'best gyms in st petersburg',
+                sources: [{ url: 'https://example.com/source', title: 'Source' }],
+              },
+            },
+            {
+              type: 'message',
+              content: [
+                {
+                  type: 'output_text',
+                  text: 'Best Day Fitness is a top gym in St. Petersburg.',
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: true,
+        recommended: true,
+        sentiment: 'positive',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  const answer = snapshot.answers[0];
+  assert.equal(answer.searchExecuted, false, 'failed search status must NOT be marked searchExecuted: true');
+  assert.equal(answer.searchFailed, true);
+  assert.equal(answer.measurementType, 'model_only');
+  assert.equal(snapshot.searchGroundedCount, 0, 'failed search excluded from search-grounded count');
+  assert.equal(snapshot.searchVisibilityScore, null, 'failed search excluded from search visibility denominator');
+  assert.equal(snapshot.visibilityScore, null, 'primary search visibility metric must be unavailable when search fails');
+  assert.equal(snapshot.modelOnlyCount, 1, 'failed search labeled and retained as model-only evaluation');
+  assert.equal(snapshot.modelOnlyVisibilityScore, 100, 'scored separately under model-only visibility');
+  assert.equal(snapshot.perEngine[0].score, null, 'per-engine primary score must be unavailable when search fails');
+  assert.equal(snapshot.perEngine[0].searchScore, null);
+  assert.equal(snapshot.perEngine[0].modelScore, 100);
+});
+
+test('absent search without search call is labeled model_only and scored separately', async () => {
+  const state = { prompts: ['prompt one'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { OPENAI_API_KEY: 'openai-secret', GEMINI_API_KEY: 'gemini-secret' },
+    providerRuntime: {
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({
+          id: 'resp_direct_model',
+          output_text: 'Best Day Fitness is located on 1st Ave S in St. Petersburg.',
+          output: [],
+        }),
+      }),
+    },
+    geminiGenerate: async () => ({
+      text: JSON.stringify({
+        mentioned: true,
+        recommended: true,
+        sentiment: 'positive',
+        competitors: [],
+      }),
+    }),
+  });
+
+  const { snapshot } = await service.runVisibility(['openai']);
+  const answer = snapshot.answers[0];
+  assert.equal(answer.searchExecuted, false);
+  assert.equal(answer.measurementType, 'model_only');
+  assert.equal(snapshot.searchGroundedCount, 0);
+  assert.equal(snapshot.searchVisibilityScore, null, 'absent search excluded from search visibility denominator');
+  assert.equal(snapshot.visibilityScore, null, 'primary search visibility metric must be unavailable when search is absent');
+  assert.equal(snapshot.modelOnlyCount, 1);
+  assert.equal(snapshot.modelOnlyVisibilityScore, 100);
+  assert.equal(snapshot.perEngine[0].score, null, 'per-engine primary score must be unavailable when search is absent');
+  assert.equal(snapshot.perEngine[0].searchScore, null);
+  assert.equal(snapshot.perEngine[0].modelScore, 100);
+});
+
+test('service executes approved service questions by category and records promptSetVersion & categories in snapshot metadata', async () => {
+  const executedPrompts = [];
+  const state = { prompts: ['custom prompt'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { GEMINI_API_KEY: 'test-key' },
+    geminiGenerate: async request => {
+      if (request.config?.tools) {
+        executedPrompts.push(request.contents);
+        return {
+          text: 'Best Day Fitness & Wellness in St. Petersburg offers private training and consultations.',
+          candidates: [{ groundingMetadata: { groundingChunks: [{ web: { title: 'Best Day Fitness', uri: 'https://bestdayfitness.com/' } }] } }],
+        };
+      }
+      return {
+        text: JSON.stringify({
+          mentioned: true,
+          recommended: true,
+          sentiment: 'positive',
+          competitors: [],
+        }),
+      };
+    },
+  });
+
+  const { snapshot } = await service.runVisibility(['google'], {
+    serviceCategories: ['consultation', 'haloredRecovery'],
+  });
+
+  assert.ok(snapshot, 'Must return snapshot');
+  assert.equal(snapshot.promptSetVersion, PROMPT_SET_VERSION);
+  assert.deepEqual(snapshot.serviceCategories, ['consultation', 'haloredRecovery']);
+  assert.equal(snapshot.prompts.length, APPROVED_SERVICE_PROMPTS.consultation.length + APPROVED_SERVICE_PROMPTS.haloredRecovery.length);
+
+  for (const answer of snapshot.answers) {
+    assert.ok(answer.serviceCategory === 'consultation' || answer.serviceCategory === 'haloredRecovery',
+      `serviceCategory must be consultation or haloredRecovery, got ${answer.serviceCategory}`);
+    assert.equal(answer.mentioned, true);
+    assert.equal(answer.recommended, true);
+  }
+
+  // Verify all consultation and haloredRecovery prompts were passed to the engine
+  for (const expected of [...APPROVED_SERVICE_PROMPTS.consultation, ...APPROVED_SERVICE_PROMPTS.haloredRecovery]) {
+    assert.ok(executedPrompts.some(p => p.includes(expected)), `Engine must receive prompt: ${expected}`);
+  }
+});
+
+test('routes preserve user-defined prompts when adding or refreshing approved service prompts', () => {
+  const { registerAiVisibilityRoutes } = require('../lib/ai-visibility-routes.js');
+  const routes = {};
+  const mockApp = {
+    get: (path, ...handlers) => { routes['GET ' + path] = handlers[handlers.length - 1]; },
+    post: (path, ...handlers) => { routes['POST ' + path] = handlers[handlers.length - 1]; },
+  };
+
+  const state = {
+    prompts: ['my proprietary user query about balance', 'my custom senior mobility test'],
+    snapshots: [],
+    updatedAt: null,
+    lastRun: null,
+  };
+  let saved = false;
+
+  registerAiVisibilityRoutes(mockApp, {
+    requireAuth: (req, res, next) => next(),
+    state,
+    nudgeSchedule: () => {},
+    brandName: () => 'Best Day Fitness',
+    enginesStatus: () => [{ id: 'google', label: 'Google', configured: true }],
+    trend: () => ({ series: [], metricLines: {}, dates: [] }),
+    anyConfigured: () => true,
+    runVisibility: async () => ({ ok: true }),
+    usageOverBudget: () => false,
+    budgetBlock: () => {},
+    save: () => { saved = true; },
+    defaultPrompts: DEFAULT_VIS_PROMPTS,
+    approvedServicePrompts: APPROVED_SERVICE_PROMPTS,
+    promptSetVersion: PROMPT_SET_VERSION,
+  });
+
+  // Test 1: Adding a category with mode="merge" preserves user's custom prompts
+  const req1 = {
+    body: {
+      category: 'consultation',
+      mode: 'merge',
+    },
+  };
+  let jsonResult1 = null;
+  const res1 = { json: data => { jsonResult1 = data; return data; } };
+
+  routes['POST /api/ai-visibility/prompts'](req1, res1);
+
+  assert.equal(jsonResult1.success, true);
+  assert.equal(jsonResult1.promptSetVersion, PROMPT_SET_VERSION);
+  // User's custom prompts MUST be preserved!
+  assert.ok(state.prompts.includes('my proprietary user query about balance'));
+  assert.ok(state.prompts.includes('my custom senior mobility test'));
+  // Consultation prompts MUST be added!
+  for (const q of APPROVED_SERVICE_PROMPTS.consultation) {
+    assert.ok(state.prompts.includes(q), `Expected consultation query "${q}" in state.prompts`);
+  }
+  assert.equal(saved, true);
+});
+
+test('never substitute another service: unmeasured category returns explicit not-yet-measured state without fallback or unrelated trend', async () => {
+  const { registerAiVisibilityRoutes } = require('../lib/ai-visibility-routes.js');
+  const routes = {};
+  const mockApp = {
+    get: (path, ...handlers) => { routes['GET ' + path] = handlers[handlers.length - 1]; },
+    post: (path, ...handlers) => { routes['POST ' + path] = handlers[handlers.length - 1]; },
+  };
+
+  const state = {
+    prompts: ['senior fitness'],
+    snapshots: [
+      {
+        id: 'run_pt_1',
+        date: '2026-09-30',
+        ranAt: '2026-09-30T10:00:00.000Z',
+        serviceCategories: ['personalTraining'],
+        visibilityScore: 90,
+        searchVisibilityScore: 90,
+        shareOfVoice: 70,
+        sentimentScore: 100,
+        leaderboard: [{ name: 'Best Day Fitness', isBrand: true, score: 90, mentions: 9 }],
+        answers: [
+          { serviceCategory: 'personalTraining', prompt: 'senior fitness', engine: 'google', mentioned: true, recommended: true, searchExecuted: true, classificationStatus: 'classified', sentiment: 'positive' },
+        ],
+      },
+    ],
+    updatedAt: '2026-09-30T10:00:00.000Z',
+    lastRun: '2026-09-30T10:00:00.000Z',
+  };
+
+  const { service } = serviceFixture({ state });
+
+  registerAiVisibilityRoutes(mockApp, {
+    requireAuth: (req, res, next) => next(),
+    state,
+    nudgeSchedule: () => {},
+    brandName: () => 'Best Day Fitness',
+    enginesStatus: () => [{ id: 'google', label: 'Google', configured: true }],
+    trend: cat => service.trend(cat),
+    anyConfigured: () => true,
+    runVisibility: async () => ({ ok: true }),
+    usageOverBudget: () => false,
+    budgetBlock: () => {},
+    save: () => {},
+    defaultPrompts: DEFAULT_VIS_PROMPTS,
+    approvedServicePrompts: APPROVED_SERVICE_PROMPTS,
+    promptSetVersion: PROMPT_SET_VERSION,
+  });
+
+  // Query unmeasured category: physicalTherapy
+  let resultPt = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'physicalTherapy' } }, { json: d => { resultPt = d; } });
+
+  assert.equal(resultPt.category, 'physicalTherapy');
+  assert.equal(resultPt.isAllServices, false);
+  assert.ok(resultPt.latest, 'latest must be an explicit not-yet-measured object');
+  assert.equal(resultPt.latest.measured, false, 'measured must be false');
+  assert.equal(resultPt.latest.status, 'not_yet_measured', 'status must be not_yet_measured');
+  assert.equal(resultPt.latest.visibilityScore, null, 'visibilityScore must be null');
+  assert.equal(resultPt.latest.searchVisibilityScore, null, 'searchVisibilityScore must be null');
+  assert.deepEqual(resultPt.latest.serviceCategories, ['physicalTherapy']);
+
+  // Deltas must be null
+  assert.deepEqual(resultPt.deltas, { visibility: null, shareOfVoice: null, sentiment: null });
+
+  // Trend must NOT fall back to personalTraining points!
+  assert.deepEqual(resultPt.trend.dates, [], 'Unmeasured category must have empty trend dates');
+  assert.deepEqual(resultPt.trend.series[0].points, [], 'Unmeasured category must have no trend points');
+
+  // Query "all services" explicitly
+  let resultAll = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'all' } }, { json: d => { resultAll = d; } });
+  assert.equal(resultAll.category, 'all');
+  assert.equal(resultAll.isAllServices, true);
+  assert.equal(resultAll.latest.visibilityScore, 90, 'All services returns the recorded personal training snapshot');
+  assert.equal(resultAll.trend.dates.length, 1);
+});
+
+test('preserve separate monitoring runs: two different services on the same day and repeated runs of same service are all preserved with unique identities', async () => {
+  const state = { prompts: ['test prompt'], snapshots: [], updatedAt: null, lastRun: null };
+  const { service } = serviceFixture({
+    state,
+    env: { GEMINI_API_KEY: 'test-key' },
+    geminiGenerate: async request => {
+      if (request.config?.tools) {
+        return {
+          text: 'Best Day Fitness in St. Petersburg is highly recommended.',
+          candidates: [{ groundingMetadata: { groundingChunks: [{ web: { title: 'Best Day Fitness', uri: 'https://bestdayfitness.com/' } }] } }],
+        };
+      }
+      return {
+        text: JSON.stringify({
+          mentioned: true,
+          recommended: true,
+          sentiment: 'positive',
+          competitors: [],
+        }),
+      };
+    },
+  });
+
+  // Run 1: consultation
+  const run1 = await service.runVisibility(['google'], { serviceCategories: ['consultation'] });
+  assert.ok(run1.snapshot);
+  const snap1 = run1.snapshot;
+  assert.ok(snap1.id, 'Run 1 must have a unique ID');
+  assert.ok(snap1.timestamp, 'Run 1 must have a timestamp');
+  assert.deepEqual(snap1.serviceCategories, ['consultation']);
+  assert.equal(state.snapshots.length, 1);
+
+  // Run 2: haloredRecovery on the same day
+  const run2 = await service.runVisibility(['google'], { serviceCategories: ['haloredRecovery'] });
+  assert.ok(run2.snapshot);
+  const snap2 = run2.snapshot;
+  assert.ok(snap2.id, 'Run 2 must have a unique ID');
+  assert.notEqual(snap1.id, snap2.id, 'IDs must be unique');
+  assert.deepEqual(snap2.serviceCategories, ['haloredRecovery']);
+
+  // CRITICAL: BOTH runs must remain in state.snapshots on the same day!
+  assert.equal(state.snapshots.length, 2, 'Both consultation and HaloRed runs on same day must be preserved');
+  assert.equal(state.snapshots[0].id, snap1.id);
+  assert.equal(state.snapshots[1].id, snap2.id);
+
+  // Run 3: Repeated consultation run on the same day
+  const run3 = await service.runVisibility(['google'], { serviceCategories: ['consultation'] });
+  assert.ok(run3.snapshot);
+  const snap3 = run3.snapshot;
+  assert.notEqual(snap1.id, snap3.id);
+  assert.equal(state.snapshots.length, 3, 'Repeated run on same day must also be preserved');
+
+  // Verify each is inspectable and correctly attributed
+  assert.deepEqual(state.snapshots[0].serviceCategories, ['consultation']);
+  assert.deepEqual(state.snapshots[1].serviceCategories, ['haloredRecovery']);
+  assert.deepEqual(state.snapshots[2].serviceCategories, ['consultation']);
+});
+
+test('mixed-service results: calculates service-filtered metrics from matching answers rather than combined score', async () => {
+  const { registerAiVisibilityRoutes } = require('../lib/ai-visibility-routes.js');
+  const routes = {};
+  const mockApp = {
+    get: (path, ...handlers) => { routes['GET ' + path] = handlers[handlers.length - 1]; },
+    post: (path, ...handlers) => { routes['POST ' + path] = handlers[handlers.length - 1]; },
+  };
+
+  // Create a mixed-service snapshot where:
+  // - 2 personalTraining answers: both recommended (100% visibility)
+  // - 2 physicalTherapy answers: neither recommended (0% visibility)
+  // - Combined score = 50% (2 of 4)
+  const mixedSnapshot = {
+    id: 'run_mixed_1',
+    date: '2026-09-30',
+    ranAt: '2026-09-30T12:00:00.000Z',
+    timestamp: '2026-09-30T12:00:00.000Z',
+    serviceCategories: ['personalTraining', 'physicalTherapy'],
+    engines: ['google'],
+    visibilityScore: 50,
+    searchVisibilityScore: 50,
+    modelOnlyVisibilityScore: null,
+    shareOfVoice: 50,
+    sentimentScore: 100,
+    answers: [
+      { engine: 'google', prompt: 'pt query 1', serviceCategory: 'personalTraining', searchExecuted: true, classificationStatus: 'classified', mentioned: true, recommended: true, sentiment: 'positive', competitors: [] },
+      { engine: 'google', prompt: 'pt query 2', serviceCategory: 'personalTraining', searchExecuted: true, classificationStatus: 'classified', mentioned: true, recommended: true, sentiment: 'positive', competitors: [] },
+      { engine: 'google', prompt: 'pt query 3', serviceCategory: 'physicalTherapy', searchExecuted: true, classificationStatus: 'classified', mentioned: true, recommended: false, sentiment: 'neutral', competitors: ['Competitor Clinic'] },
+      { engine: 'google', prompt: 'pt query 4', serviceCategory: 'physicalTherapy', searchExecuted: true, classificationStatus: 'classified', mentioned: false, recommended: false, sentiment: 'absent', competitors: ['Competitor Clinic'] },
+    ],
+  };
+
+  const state = {
+    prompts: [],
+    snapshots: [mixedSnapshot],
+    updatedAt: '2026-09-30T12:00:00.000Z',
+    lastRun: '2026-09-30T12:00:00.000Z',
+  };
+
+  const { service } = serviceFixture({ state });
+
+  registerAiVisibilityRoutes(mockApp, {
+    requireAuth: (req, res, next) => next(),
+    state,
+    nudgeSchedule: () => {},
+    brandName: () => 'Best Day Fitness',
+    enginesStatus: () => [{ id: 'google', label: 'Google', configured: true }],
+    trend: cat => service.trend(cat),
+    anyConfigured: () => true,
+    runVisibility: async () => ({ ok: true }),
+    usageOverBudget: () => false,
+    budgetBlock: () => {},
+    save: () => {},
+    defaultPrompts: DEFAULT_VIS_PROMPTS,
+    approvedServicePrompts: APPROVED_SERVICE_PROMPTS,
+    promptSetVersion: PROMPT_SET_VERSION,
+  });
+
+  // Query category=personalTraining -> must calculate 100% from its 2 matching answers
+  let ptRes = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'personalTraining' } }, { json: d => { ptRes = d; } });
+  assert.equal(ptRes.category, 'personalTraining');
+  assert.equal(ptRes.latest.visibilityScore, 100, 'personalTraining service-filtered score must be 100%');
+  assert.equal(ptRes.latest.answers.length, 2);
+
+  // Query category=physicalTherapy -> must calculate 0% from its 2 matching answers
+  let physRes = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'physicalTherapy' } }, { json: d => { physRes = d; } });
+  assert.equal(physRes.category, 'physicalTherapy');
+  assert.equal(physRes.latest.visibilityScore, 0, 'physicalTherapy service-filtered score must be 0%');
+  assert.equal(physRes.latest.answers.length, 2);
+
+  // Query all services -> returns combined score of 50%
+  let allRes = null;
+  routes['GET /api/ai-visibility']({ query: { category: 'all' } }, { json: d => { allRes = d; } });
+  assert.equal(allRes.category, 'all');
+  assert.equal(allRes.latest.visibilityScore, 50, 'All services returns the combined 50% score');
+  assert.equal(allRes.latest.answers.length, 4);
+});
+
+
+
