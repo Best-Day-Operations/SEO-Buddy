@@ -332,4 +332,32 @@ test('adjacent member ($299) and public ($399) HaloRed cards must not turn valid
   assert.ok(result.verifiedFacts.some(f => f.includes('$39.99')));
 });
 
+test('regression: adjacent cards with Member $299, Public $199, and Public $399 must flag $199 violation and NOT excuse it as non-violating', () => {
+  const html = '<section>Member Rate $299 / month</section><section>Public Rate $199 / month</section><section>Public premium plan $399 / month</section>';
+  const result = assessPageQuality(html, { pageType: 'halored' });
+
+  assert.ok(
+    result.claimsViolations.includes('incorrect public recovery plan pricing ($399 approved)'),
+    `Expected violation for $199 public rate, got: ${result.claimsViolations.join(', ')}`
+  );
+  assert.equal(
+    result.flaggedForReview.some(f => f.reason && f.reason.includes('verified non-violating')),
+    false,
+    'Must NOT label invalid public price as verified non-violating'
+  );
+  assert.equal(result.publishable, false);
+});
+
+test('regression: "Non-members $299 monthly public rate" must be flagged as incorrect public recovery plan pricing', () => {
+  const html = '<p>Non-members $299 monthly public rate</p>';
+  const result = assessPageQuality(html, { pageType: 'halored' });
+
+  assert.ok(
+    result.claimsViolations.includes('incorrect public recovery plan pricing ($399 approved)'),
+    `Expected violation for non-members $299, got: ${result.claimsViolations.join(', ')}`
+  );
+  assert.equal(result.publishable, false);
+});
+
+
 
