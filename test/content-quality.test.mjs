@@ -290,3 +290,46 @@ test('ambiguous recovery pricing reports needs review instead of an incorrect fa
     'Expected flaggedForReview with ambiguous_pricing_context');
 });
 
+test('adjacent member ($299) and public ($399) HaloRed cards must not turn valid member price into a public pricing violation', () => {
+  const adjacentCardsHtml = `
+    <div>
+      <h1>HaloRed O₂ Recovery</h1>
+      <p>By appointment only in St. Petersburg, FL at 6619 1st Ave S. Call (727) 334-1472. Our studio provides a comfortable barefoot training environment for seniors and active adults.</p>
+      <h2>HaloRed Recovery Options</h2>
+      <p>Every session includes salt therapy, red and near-infrared light, and oxygen-enriched air. A dedicated recovery booth combining full-body photobiomodulation with dry salt halotherapy helps older adults recover vitality and improve respiratory wellness.</p>
+      <div class="ath-halo-cards">
+        <div class="ath-halo-card">
+          <span>SINGLE SESSION</span>
+          <div class="ath-price">$39.99 / 15-minute session</div>
+        </div>
+        <div class="ath-halo-card card-featured">
+          <span>MONTHLY PLAN</span>
+          <div class="ath-halo-plan-tiers">
+            <div class="ath-halo-tier member-tier">
+              <span class="ath-halo-tier-name">Member Rate</span>
+              <span class="ath-halo-tier-eligibility">For all active Best Day members</span>
+              <div class="ath-halo-tier-price">$299 / month</div>
+            </div>
+            <div class="ath-halo-tier public-tier">
+              <span class="ath-halo-tier-name">Public Rate</span>
+              <span class="ath-halo-tier-eligibility">Available to guests &amp; community</span>
+              <div class="ath-halo-tier-price">$399 / month</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <h2>Frequently Asked Questions</h2>
+      <p>How do appointments work? All sessions must be scheduled in advance with our Client Experience Team. Base sessions run fifteen minutes, and members can add time as needed during their scheduled visit.</p>
+      <ul><li>Red light</li><li>Salt aerosol</li></ul>
+      <a href="/book">Book Your Recovery Session</a>
+    </div>
+  `;
+  const result = assessPageQuality(adjacentCardsHtml, { pageType: 'halored' });
+  assert.deepEqual(result.claimsViolations, []);
+  assert.equal(result.publishable, true);
+  assert.ok(result.verifiedFacts.includes('Member recovery plan ($299/mo)'));
+  assert.ok(result.verifiedFacts.includes('Public guest recovery plan ($399/mo)'));
+  assert.ok(result.verifiedFacts.some(f => f.includes('$39.99')));
+});
+
+
